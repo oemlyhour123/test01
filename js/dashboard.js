@@ -461,6 +461,10 @@
     latest = Store.getDashboard({ period: state.period, locationId: state.locationId });
     var periodLabel = document.getElementById('periodLabel');
     if (periodLabel) periodLabel.textContent = F.monthLabel(state.period);
+    var lastUpdated = document.getElementById('dashboardLastUpdated');
+    if (lastUpdated) {
+      lastUpdated.textContent = t('common.lastChanged') + ': ' + F.dateTime(Store.getLastUpdated('dashboard'));
+    }
     renderSummary();
     renderProperties();
     renderCharts();
@@ -473,6 +477,62 @@
   function detailItem(label, value) {
     return '<div class="detail-item"><span>' + esc(label) + '</span><strong>' +
       esc(value === null || value === undefined || value === '' ? '—' : value) + '</strong></div>';
+  }
+
+  function utilityComparisonMarkup(details) {
+    var prev = details.previousMonth || {};
+    var inv = details.invoice;
+    var rows = [
+      {
+        key: 'electricity',
+        icon: 'bolt',
+        unit: t('common.kwh'),
+        label: t('meters.electricity'),
+        last: prev.electricity,
+        curr: inv.electricity
+      },
+      {
+        key: 'water',
+        icon: 'drop',
+        unit: t('common.m3'),
+        label: t('meters.water'),
+        last: prev.water,
+        curr: inv.water
+      }
+    ];
+
+    return '<div class="utility-compare-grid">' + rows.map(function (row) {
+      var curr = row.curr || { previous: 0, current: 0, consumption: 0, rate: 0, amount: 0 };
+      var lastUsage = row.last ? Number(row.last.consumption) || 0 : null;
+      var currUsage = Number(curr.consumption) || 0;
+      var delta = lastUsage !== null ? Math.round((currUsage - lastUsage) * 100) / 100 : null;
+      var deltaClass = delta === null ? 'is-flat' : (delta > 0.005 ? 'is-up' : (delta < -0.005 ? 'is-down' : 'is-flat'));
+      var deltaLabel = delta === null
+        ? t('invoices.noLastMonth')
+        : (delta > 0 ? '+' : '') + F.number(delta, 2) + ' ' + row.unit + ' (' + t('invoices.vsLastMonth') + ')';
+
+      return '<div class="utility-compare-card">' +
+        '<div class="utility-compare-head">' +
+          '<span class="utility-compare-title">' + icon(row.icon, 16) + '<strong>' + esc(row.label) + '</strong></span>' +
+          '<span class="utility-delta ' + deltaClass + '">' + esc(deltaLabel) + '</span>' +
+        '</div>' +
+        '<div class="utility-compare-cols">' +
+          '<div class="utility-compare-col is-prev">' +
+            '<small>' + esc(t('invoices.lastMonthData')) +
+              (row.last ? ' (' + esc(F.monthShort(row.last.period)) + ')' : '') + '</small>' +
+            '<strong>' + (row.last ? esc(F.number(row.last.consumption, 2)) + ' ' + esc(row.unit) : '—') + '</strong>' +
+            '<span>' + (row.last
+              ? esc(F.number(row.last.previous, 0) + ' → ' + F.number(row.last.current, 0)) + ' • ' + F.money(row.last.amount)
+              : esc(t('invoices.noLastMonth'))) + '</span>' +
+          '</div>' +
+          '<div class="utility-compare-col is-curr">' +
+            '<small>' + esc(t('invoices.thisMonthInput')) + '</small>' +
+            '<strong>' + esc(F.number(currUsage, 2)) + ' ' + esc(row.unit) + '</strong>' +
+            '<span>' + esc(F.number(curr.previous, 0) + ' → ' + F.number(curr.current, 0)) + ' • ' + F.money(curr.amount) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
   }
 
   function paymentRows(payments) {
@@ -520,6 +580,11 @@
         detailItem(t('details.phone'), invoice.tenant ? F.phone(invoice.tenant.phone) : '—') +
         detailItem(t('invoices.issueDate'), F.date(invoice.issueDate)) +
         detailItem(t('invoices.dueDate'), F.date(invoice.dueDate)) +
+        detailItem(t('common.updatedAt'), F.dateTime(invoice.updatedAt)) +
+      '</div>' +
+      '<div class="detail-section">' +
+        '<h3>' + esc(t('invoices.utilityComparison')) + '</h3>' +
+        utilityComparisonMarkup(details) +
       '</div>' +
       '<div class="detail-section">' +
         '<h3>' + esc(t('invoices.breakdown')) + '</h3>' +
@@ -540,9 +605,12 @@
       title: invoice.invoiceNumber,
       kicker: t('details.invoiceTitle'),
       subtitle: tenantName + ' • ' + t('invoices.room') + ' ' + invoice.roomLabel,
+      size: 'lg',
       body: body,
       footer: '<button type="button" class="button button-ghost" data-copy-invoice>' +
           icon('copy', 16) + '<span>' + esc(t('invoices.copyNumber')) + '</span></button>' +
+        '<button type="button" class="button button-secondary" data-print-invoice>' +
+          icon('printer', 16) + '<span>' + esc(t('invoices.printPdf')) + '</span></button>' +
         '<button type="button" class="button button-primary" data-close-modal>' +
           esc(t('common.close')) + '</button>',
       onOpen: function (dialog) {
@@ -551,6 +619,13 @@
           UI.copy(invoice.invoiceNumber).then(function (ok) {
             UI.toast(ok ? t('invoices.copied') : t('common.error'), ok ? 'success' : 'error');
           });
+        });
+        dialog.querySelector('[data-print-invoice]').addEventListener('click', function () {
+          if (RRMS.Manager && typeof RRMS.Manager.openInvoicePdfPreview === 'function') {
+            RRMS.Manager.openInvoicePdfPreview(invoice.id);
+          } else {
+            window.print();
+          }
         });
       }
     });
@@ -596,6 +671,7 @@
         detailItem(t('details.moveOut'), details.tenancy && details.tenancy.endDate ? F.date(details.tenancy.endDate) : '—') +
         detailItem(t('details.contract'), details.tenancy ? t('status.' + details.tenancy.status) : '—') +
         detailItem(t('details.address'), tenant.addressKm) +
+        detailItem(t('common.updatedAt'), F.dateTime(tenant.updatedAt)) +
       '</div>' +
       '<div class="detail-section">' +
         '<h3>' + esc(t('details.openInvoices')) + '</h3>' + openInvoices +
@@ -664,6 +740,7 @@
         detailItem(t('details.phone'), tenant ? F.phone(tenant.phone) : '—') +
         detailItem(t('details.moveIn'), details.tenancy ? F.date(details.tenancy.startDate) : '—') +
         detailItem(t('details.contract'), details.tenancy ? t('status.' + details.tenancy.status) : '—') +
+        detailItem(t('common.updatedAt'), F.dateTime(room.updatedAt)) +
       '</div>' +
       '<div class="detail-section">' +
         '<h3>' + esc(t('nav.meterReadings')) + '</h3>' +

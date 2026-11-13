@@ -955,4 +955,25 @@
   a[href]::after {
     content: none !important;
   }
+
+  body.print-invoice-mode .app-shell,
+  body.print-invoice-mode .mobile-nav,
+  body.print-invoice-mode .fab,
+  body.print-invoice-mode .modal-overlay,
+  body.print-invoice-mode .toast-stack {
+    display: none !important;
+  }
+
+  body.print-invoice-mode .print-invoice-root {
+    display: block !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  body.print-invoice-mode .invoice-pdf-sheet {
+    max-width: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
 }

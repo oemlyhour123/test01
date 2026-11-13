@@ -403,6 +403,7 @@
     else if (route === 'settings') body = viewSettings();
     else body = emptyState('common.noData', 'inbox');
 
+    var changeStamp = Store.getLastUpdated(route);
     moduleEl.innerHTML =
       '<div class="page-heading mgmt-heading">' +
         '<div>' +
@@ -410,6 +411,11 @@
             esc(t('app.short')) + '</p>' +
           '<h1>' + esc(navLabel(route)) + '</h1>' +
           '<p class="page-subtitle">' + esc(t(route + '.subtitle')) + '</p>' +
+          '<div class="mgmt-change-bar">' +
+            '<span class="change-pill">' + icon('clock', 14) +
+              '<span>' + esc(t('common.lastChanged')) + ': <strong>' + esc(F.dateTime(changeStamp)) + '</strong></span>' +
+            '</span>' +
+          '</div>' +
         '</div>' +
         '<div class="page-actions">' + headingActions(route) + '</div>' +
       '</div>' +
@@ -431,7 +437,9 @@
     if (route === 'invoices') {
       return '<button type="button" class="button button-secondary button-icon-text" data-mgmt="invoice-pay-new">' +
           icon('wallet', 17) + '<span>' + esc(t('payments.add')) + '</span></button>' +
-        primaryButton('invoice-generate', 'invoices.generate', 'receipt');
+        '<button type="button" class="button button-secondary button-icon-text" data-mgmt="invoice-generate">' +
+          icon('receipt', 17) + '<span>' + esc(t('invoices.generate')) + '</span></button>' +
+        primaryButton('invoice-create', 'invoices.create', 'plus');
     }
     if (route === 'payments') return primaryButton('payment-add', 'payments.add', 'wallet');
     if (route === 'reports') {
@@ -495,6 +503,8 @@
             '<div><small>' + esc(t('locations.outstanding')) + '</small><strong class="' +
               (item.outstanding > 0.005 ? 'text-danger' : 'text-success') + '">' + money(item.outstanding) + '</strong></div>' +
           '</div>' +
+          '<div class="mgmt-card-updated">' + icon('clock', 12) +
+            '<span>' + esc(t('common.updatedAt')) + ': ' + esc(F.shortDateTime(location.updatedAt)) + '</span></div>' +
           '<div class="mgmt-card-foot">' +
             '<button type="button" class="button button-ghost button-small" data-mgmt="loc-rooms" data-id="' +
               esc(location.id) + '">' + icon('door', 15) + '<span>' + esc(t('locations.manageRooms')) + '</span></button>' +
@@ -606,6 +616,7 @@
         { label: t('rooms.tenant') },
         { label: t('rooms.rent'), align: 'right' },
         { label: t('common.status') },
+        { label: t('common.updatedAt') },
         { label: t('common.actions'), align: 'right' }
       ], rows.map(function (row) {
         var room = row.room;
@@ -620,6 +631,7 @@
           cell(t('rooms.tenant'), tenant ? tenantName(tenant) : '—') +
           cell(t('rooms.rent'), money(room.monthlyRent), 'align-right') +
           '<td data-label="' + esc(t('common.status')) + '">' + UI.statusBadge(row.status, t) + '</td>' +
+          cell(t('common.updatedAt'), F.shortDateTime(room.updatedAt), 'cell-updated') +
           '<td data-label="' + esc(t('common.actions')) + '" class="align-right"><div class="row-actions">' +
             actionButton('room-view', room.id, 'eye', 'common.view') +
             actionButton('room-edit', room.id, 'settings', 'common.edit') +
@@ -736,6 +748,7 @@
         detailItem(t('details.currentTenant'), tenant ? tenantName(tenant) : t('details.noTenant')) +
         detailItem(t('details.phone'), tenant ? F.phone(tenant.phone) : '—') +
         detailItem(t('rooms.history'), F.number(details.historyCount)) +
+        detailItem(t('common.updatedAt'), F.dateTime(room.updatedAt)) +
       '</div>' +
       (room.notes ? '<div class="detail-section"><h3>' + esc(t('rooms.notes')) + '</h3><p class="detail-note">' +
         esc(room.notes) + '</p></div>' : '') +
@@ -789,6 +802,7 @@
         { label: t('rooms.filterLocation') },
         { label: t('tenants.outstanding'), align: 'right' },
         { label: t('tenants.invoices'), align: 'right' },
+        { label: t('common.updatedAt') },
         { label: t('common.actions'), align: 'right' }
       ], rows.map(function (row) {
         var tenant = row.tenant;
@@ -802,6 +816,7 @@
           cell(t('rooms.filterLocation'), locationName(row.location)) +
           cell(t('tenants.outstanding'), money(row.outstanding), 'align-right' + (row.outstanding > 0.005 ? ' text-danger' : '')) +
           cell(t('tenants.invoices'), F.number(row.invoiceCount), 'align-right') +
+          cell(t('common.updatedAt'), F.shortDateTime(tenant.updatedAt), 'cell-updated') +
           '<td data-label="' + esc(t('common.actions')) + '" class="align-right"><div class="row-actions">' +
             actionButton('tenant-view', tenant.id, 'eye', 'common.view') +
             actionButton('tenant-edit', tenant.id, 'settings', 'common.edit') +
@@ -897,6 +912,7 @@
         detailItem(t('tenants.invoices'), F.number(details.invoiceCount)) +
         detailItem(t('tenants.emergencyName'), tenant.emergencyContactName || '—') +
         detailItem(t('tenants.emergencyPhone'), tenant.emergencyContactPhone || '—') +
+        detailItem(t('common.updatedAt'), F.dateTime(tenant.updatedAt)) +
       '</div>' +
       (details.tenancy
         ? '<div class="detail-section"><h3>' + esc(t('tenancies.title')) + '</h3>' +
@@ -967,6 +983,7 @@
         { label: t('tenancies.rent'), align: 'right' },
         { label: t('tenancies.deposit'), align: 'right' },
         { label: t('common.status') },
+        { label: t('common.updatedAt') },
         { label: t('common.actions'), align: 'right' }
       ], rows.map(function (row) {
         var tenancy = row.tenancy;
@@ -981,6 +998,7 @@
           cell(t('tenancies.rent'), money(tenancy.monthlyRent), 'align-right') +
           cell(t('tenancies.deposit'), money(tenancy.depositAmount), 'align-right') +
           '<td data-label="' + esc(t('common.status')) + '">' + UI.statusBadge(tenancy.status, t) + '</td>' +
+          cell(t('common.updatedAt'), F.shortDateTime(tenancy.updatedAt), 'cell-updated') +
           '<td data-label="' + esc(t('common.actions')) + '" class="align-right"><div class="row-actions">' +
             (tenancy.status === 'active'
               ? actionButton('tenancy-end', tenancy.id, 'logout', 'tenants.moveOut')
@@ -1118,6 +1136,7 @@
           '<th>' + esc(t('meters.tenant')) + '</th>' +
           '<th>' + esc(t('meters.electricity')) + '</th>' +
           '<th>' + esc(t('meters.water')) + '</th>' +
+          '<th>' + esc(t('common.updatedAt')) + '</th>' +
           '<th class="align-right">' + esc(t('common.actions')) + '</th>' +
         '</tr></thead><tbody>' +
         rows.map(function (row) {
@@ -1125,6 +1144,9 @@
           var eRate = location ? location.electricityRate : 0;
           var wRate = location ? location.waterRate : 0;
           var disabled = !row.tenancy;
+          var eTs = row.electricity && row.electricity.updatedAt ? row.electricity.updatedAt : '';
+          var wTs = row.water && row.water.updatedAt ? row.water.updatedAt : '';
+          var rowUpdated = eTs > wTs ? eTs : wTs;
           function cellFor(utility, reading, previous, rate) {
             return '<td data-label="' + esc(t('meters.' + utility)) + '" class="meter-cell">' +
               '<div class="meter-entry">' +
@@ -1152,6 +1174,7 @@
               : '<span class="muted">' + esc(t('meters.noTenancy')) + '</span>') + '</td>' +
             cellFor('electricity', row.electricity, row.electricityPrevious, eRate) +
             cellFor('water', row.water, row.waterPrevious, wRate) +
+            cell(t('common.updatedAt'), rowUpdated ? F.shortDateTime(rowUpdated) : '—', 'cell-updated') +
             '<td data-label="' + esc(t('common.actions')) + '" class="align-right">' +
               '<button type="button" class="button button-secondary button-small" data-mgmt="reading-save" data-id="' +
                 esc(row.room.id) + '"' + (disabled ? ' disabled' : '') + '>' +
@@ -1240,6 +1263,7 @@
         { label: t('invoices.total'), align: 'right' },
         { label: t('invoices.balance'), align: 'right' },
         { label: t('common.status') },
+        { label: t('common.updatedAt') },
         { label: t('common.actions'), align: 'right' }
       ], rows.map(function (invoice) {
         return '<tr data-search-text="' + esc(normalize(invoice.invoiceNumber + ' ' +
@@ -1253,8 +1277,13 @@
           cell(t('invoices.total'), money(invoice.total), 'align-right') +
           cell(t('invoices.balance'), money(invoice.balance), 'align-right' + (invoice.balance > 0.005 ? ' text-danger' : '')) +
           '<td data-label="' + esc(t('common.status')) + '">' + UI.statusBadge(invoice.displayStatus, t) + '</td>' +
+          cell(t('common.updatedAt'), F.shortDateTime(invoice.updatedAt), 'cell-updated') +
           '<td data-label="' + esc(t('common.actions')) + '" class="align-right"><div class="row-actions">' +
             actionButton('invoice-view', invoice.id, 'eye', 'common.view') +
+            actionButton('invoice-print', invoice.id, 'printer', 'invoices.printPdf') +
+            (invoice.displayStatus !== 'cancelled'
+              ? actionButton('invoice-edit', invoice.id, 'edit', 'common.edit')
+              : '') +
             (invoice.displayStatus !== 'cancelled' && invoice.balance > 0.005
               ? actionButton('invoice-pay', invoice.id, 'wallet', 'invoices.recordPayment')
               : '') +
@@ -1278,37 +1307,529 @@
     return summaryGrid(cards) + filtersHtml + tenantChip + '<section class="section">' + body + '</section>';
   }
 
+  function tenancyCoversPeriodLocal(tenancy, period) {
+    if (!tenancy || !period) return false;
+    var parts = String(period).split('-');
+    var year = Number(parts[0]);
+    var month = Number(parts[1]);
+    var endDay = new Date(year, month, 0).getDate();
+    var start = period + '-01';
+    var end = period + '-' + String(endDay).padStart(2, '0');
+    return (!tenancy.startDate || tenancy.startDate <= end) &&
+      (!tenancy.endDate || tenancy.endDate >= start);
+  }
+
+  function utilityComparisonMarkup(details) {
+    var prev = details.previousMonth || {};
+    var inv = details.invoice;
+    var rows = [
+      {
+        key: 'electricity',
+        icon: 'bolt',
+        unit: t('common.kwh'),
+        label: t('meters.electricity'),
+        last: prev.electricity,
+        curr: inv.electricity
+      },
+      {
+        key: 'water',
+        icon: 'drop',
+        unit: t('common.m3'),
+        label: t('meters.water'),
+        last: prev.water,
+        curr: inv.water
+      }
+    ];
+
+    return '<div class="utility-compare-grid">' + rows.map(function (row) {
+      var curr = row.curr || { previous: 0, current: 0, consumption: 0, rate: 0, amount: 0 };
+      var lastUsage = row.last ? Number(row.last.consumption) || 0 : null;
+      var currUsage = Number(curr.consumption) || 0;
+      var delta = lastUsage !== null ? Math.round((currUsage - lastUsage) * 100) / 100 : null;
+      var deltaClass = delta === null ? 'is-flat' : (delta > 0.005 ? 'is-up' : (delta < -0.005 ? 'is-down' : 'is-flat'));
+      var deltaLabel = delta === null
+        ? t('invoices.noLastMonth')
+        : (delta > 0 ? '+' : '') + F.number(delta, 2) + ' ' + row.unit + ' (' + t('invoices.vsLastMonth') + ')';
+
+      return '<div class="utility-compare-card">' +
+        '<div class="utility-compare-head">' +
+          '<span class="utility-compare-title">' + icon(row.icon, 16) + '<strong>' + esc(row.label) + '</strong></span>' +
+          '<span class="utility-delta ' + deltaClass + '">' + esc(deltaLabel) + '</span>' +
+        '</div>' +
+        '<div class="utility-compare-cols">' +
+          '<div class="utility-compare-col is-prev">' +
+            '<small>' + esc(t('invoices.lastMonthData')) +
+              (row.last ? ' (' + esc(F.monthShort(row.last.period)) + ')' : '') + '</small>' +
+            '<strong>' + (row.last ? esc(F.number(row.last.consumption, 2)) + ' ' + esc(row.unit) : '—') + '</strong>' +
+            '<span>' + (row.last
+              ? esc(F.number(row.last.previous, 0) + ' → ' + F.number(row.last.current, 0)) + ' • ' + money(row.last.amount)
+              : esc(t('invoices.noLastMonth'))) + '</span>' +
+          '</div>' +
+          '<div class="utility-compare-col is-curr">' +
+            '<small>' + esc(t('invoices.thisMonthInput')) + '</small>' +
+            '<strong>' + esc(F.number(currUsage, 2)) + ' ' + esc(row.unit) + '</strong>' +
+            '<span>' + esc(F.number(curr.previous, 0) + ' → ' + F.number(curr.current, 0)) + ' • ' + money(curr.amount) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function utilityInputSectionMarkup(summary, opts) {
+    var options = opts || {};
+    var specs = [
+      {
+        key: 'electricity',
+        icon: 'bolt',
+        unit: t('common.kwh'),
+        label: t('meters.electricity'),
+        currentName: 'electricityCurrent',
+        rateName: 'electricityRate',
+        info: summary ? summary.electricity : null,
+        presetCurrent: options.electricityCurrent,
+        presetRate: options.electricityRate
+      },
+      {
+        key: 'water',
+        icon: 'drop',
+        unit: t('common.m3'),
+        label: t('meters.water'),
+        currentName: 'waterCurrent',
+        rateName: 'waterRate',
+        info: summary ? summary.water : null,
+        presetCurrent: options.waterCurrent,
+        presetRate: options.waterRate
+      }
+    ];
+
+    return '<div class="utility-input-grid">' + specs.map(function (spec) {
+      var info = spec.info || { lastMonth: null, latestPrior: null, current: null, previousValue: 0, rate: 0 };
+      var prevRec = info.lastMonth || info.latestPrior;
+      var basePrev = Number(info.previousValue) || 0;
+      var rate = spec.presetRate !== undefined && spec.presetRate !== null
+        ? Number(spec.presetRate)
+        : (info.current ? Number(info.current.rate) : Number(info.rate) || 0);
+      var currVal = spec.presetCurrent !== undefined && spec.presetCurrent !== null
+        ? spec.presetCurrent
+        : (info.current ? info.current.current : '');
+      var lastUsage = prevRec ? Number(prevRec.consumption) || 0 : null;
+      var hasVal = String(currVal).trim() !== '' && isFinite(Number(currVal));
+      var currNum = hasVal ? Number(currVal) : null;
+      var usage = currNum !== null ? Math.max(Math.round((currNum - basePrev) * 100) / 100, 0) : null;
+      var amount = usage !== null ? Math.round(usage * rate * 100) / 100 : null;
+
+      return '<div class="utility-input-card" data-utility-card="' + spec.key + '">' +
+        '<div class="utility-compare-head">' +
+          '<span class="utility-compare-title">' + icon(spec.icon, 16) + '<strong>' + esc(spec.label) + '</strong></span>' +
+          '<span class="utility-delta is-flat" data-inv-delta="' + spec.key + '">' + esc(t('invoices.vsLastMonth')) + '</span>' +
+        '</div>' +
+        '<div class="utility-last-box">' +
+          '<small>' + esc(t('invoices.lastMonthData')) +
+            (prevRec ? ' (' + esc(F.monthShort(prevRec.period)) + ')' : '') + '</small>' +
+          (prevRec
+            ? '<div class="utility-last-metrics">' +
+                '<div><span>' + esc(t('invoices.usage')) + '</span><strong>' + esc(F.number(prevRec.consumption, 2)) + ' ' + esc(spec.unit) + '</strong></div>' +
+                '<div><span>' + esc(t('invoices.prevReading')) + ' → ' + esc(t('invoices.currReading')) + '</span><strong>' +
+                  esc(F.number(prevRec.previous, 0) + ' → ' + F.number(prevRec.current, 0)) + '</strong></div>' +
+                '<div><span>' + esc(t('invoices.amount')) + '</span><strong>' + money(prevRec.amount) + '</strong></div>' +
+              '</div>'
+            : '<p class="utility-last-empty">' + esc(t('invoices.noLastMonth')) + '</p>') +
+        '</div>' +
+        '<div class="utility-curr-box">' +
+          '<small>' + esc(t('invoices.thisMonthInput')) + ' (' + esc(t('invoices.prevReading')) + ': <strong>' +
+            esc(F.number(basePrev, 0)) + '</strong>)</small>' +
+          '<div class="utility-curr-inputs">' +
+            '<label class="form-field"><span>' + esc(t('invoices.currReading')) + ' (' + esc(spec.unit) + ')</span>' +
+              '<input type="number" name="' + spec.currentName + '" inputmode="decimal" step="0.01" min="' + esc(basePrev) + '" ' +
+                'value="' + esc(currVal) + '" placeholder="' + esc(F.number(basePrev, 0)) + '" ' +
+                'data-invoice-reading="' + spec.key + '" data-prev="' + esc(basePrev) + '" ' +
+                'data-last-usage="' + esc(lastUsage !== null ? lastUsage : '') + '" data-unit="' + esc(spec.unit) + '">' +
+            '</label>' +
+            '<label class="form-field"><span>' + esc(t('invoices.rate')) + '</span>' +
+              '<input type="number" name="' + spec.rateName + '" inputmode="decimal" step="0.01" min="0" ' +
+                'value="' + esc(rate) + '" data-invoice-rate="' + spec.key + '">' +
+            '</label>' +
+          '</div>' +
+          '<div class="utility-curr-summary">' +
+            '<span>' + esc(t('invoices.usage')) + ': <strong data-inv-usage="' + spec.key + '">' +
+              (usage !== null ? esc(F.number(usage, 2) + ' ' + spec.unit) : '—') + '</strong></span>' +
+            '<span>' + esc(t('invoices.amount')) + ': <strong data-inv-amount="' + spec.key + '">' +
+              (amount !== null ? money(amount) : '—') + '</strong></span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function liveTotalBarMarkup() {
+    return '<div class="invoice-live-total">' +
+      '<div><span>' + esc(t('invoices.liveTotal')) + '</span><small>' + esc(t('invoices.pdfKhrEquivalent')) +
+        ': <span data-live-total-khr>—</span></small></div>' +
+      '<strong data-live-total-usd>$0.00</strong>' +
+    '</div>';
+  }
+
+  function wireInvoiceUtilityLiveCalc(dialog) {
+    function update() {
+      var utilityTotal = 0;
+      ['electricity', 'water'].forEach(function (utility) {
+        var currInput = dialog.querySelector('[data-invoice-reading="' + utility + '"]');
+        var rateInput = dialog.querySelector('[data-invoice-rate="' + utility + '"]');
+        var usageNode = dialog.querySelector('[data-inv-usage="' + utility + '"]');
+        var amountNode = dialog.querySelector('[data-inv-amount="' + utility + '"]');
+        var deltaNode = dialog.querySelector('[data-inv-delta="' + utility + '"]');
+        if (!currInput) return;
+
+        var prev = Number(currInput.getAttribute('data-prev')) || 0;
+        var unit = currInput.getAttribute('data-unit') || '';
+        var lastAttr = currInput.getAttribute('data-last-usage');
+        var lastUsage = lastAttr !== '' && lastAttr !== null ? Number(lastAttr) : null;
+        var rate = rateInput ? Math.max(Number(rateInput.value) || 0, 0) : 0;
+        var raw = String(currInput.value).trim();
+
+        if (raw === '' || !isFinite(Number(raw))) {
+          if (usageNode) usageNode.textContent = '—';
+          if (amountNode) amountNode.textContent = '—';
+          if (deltaNode) {
+            deltaNode.className = 'utility-delta is-flat';
+            deltaNode.textContent = lastUsage === null ? t('invoices.noLastMonth') : t('invoices.vsLastMonth');
+          }
+          return;
+        }
+
+        var current = Number(raw);
+        var usage = Math.max(Math.round((current - prev) * 100) / 100, 0);
+        var amount = Math.round(usage * rate * 100) / 100;
+        utilityTotal += amount;
+
+        if (usageNode) usageNode.textContent = F.number(usage, 2) + ' ' + unit;
+        if (amountNode) amountNode.textContent = money(amount);
+        if (deltaNode) {
+          if (lastUsage === null) {
+            deltaNode.className = 'utility-delta is-flat';
+            deltaNode.textContent = t('invoices.noLastMonth');
+          } else {
+            var delta = Math.round((usage - lastUsage) * 100) / 100;
+            deltaNode.className = 'utility-delta ' + (delta > 0.005 ? 'is-up' : (delta < -0.005 ? 'is-down' : 'is-flat'));
+            deltaNode.textContent = (delta > 0 ? '+' : '') + F.number(delta, 2) + ' ' + unit + ' (' + t('invoices.vsLastMonth') + ')';
+          }
+        }
+      });
+
+      var rent = Math.max(formNumber(dialog, 'rent'), 0);
+      var other = Math.max(formNumber(dialog, 'otherCharges'), 0);
+      var discount = Math.max(formNumber(dialog, 'discount'), 0);
+      var lateFee = Math.max(formNumber(dialog, 'lateFee'), 0);
+      var prevBalance = Math.max(formNumber(dialog, 'previousBalance'), 0);
+      var total = Math.max(Math.round((rent + utilityTotal + other + lateFee + prevBalance - discount) * 100) / 100, 0);
+
+      var usdNode = dialog.querySelector('[data-live-total-usd]');
+      var khrNode = dialog.querySelector('[data-live-total-khr]');
+      if (usdNode) usdNode.textContent = money(total);
+      if (khrNode) khrNode.textContent = F.moneyKhr(total);
+    }
+
+    dialog.addEventListener('input', function (event) {
+      if (event.target.matches('[data-invoice-reading], [data-invoice-rate], [name="rent"], [name="otherCharges"], [name="discount"], [name="lateFee"], [name="previousBalance"]')) {
+        update();
+      }
+    });
+    update();
+    return { update: update };
+  }
+
+  function openCreateInvoiceForm() {
+    var filters = filtersFor('invoices');
+    var defaultPeriod = filters.period === 'all' ? Store.getMeta().currentPeriod : filters.period;
+    var activeTenancies = Store.getTenancies().filter(function (item) {
+      return item.status === 'active';
+    });
+    if (!activeTenancies.length) {
+      UI.toast(t('invoices.noActiveTenancies'), 'info');
+      return;
+    }
+
+    function tenanciesForPeriod(period) {
+      return Store.getTenancies().filter(function (item) {
+        return item.status === 'active' && tenancyCoversPeriodLocal(item, period);
+      });
+    }
+
+    function roomOptionLabel(tenancy, period) {
+      var room = Store.getRoom(tenancy.roomId);
+      var tenant = Store.getTenant(tenancy.tenantId);
+      var location = room ? Store.getLocation(room.locationId) : null;
+      var billed = Store.getInvoices().some(function (inv) {
+        return inv.status !== 'cancelled' && inv.billingPeriod === period &&
+          (inv.tenancyId === tenancy.id || inv.roomId === tenancy.roomId);
+      });
+      return (location ? locationName(location) + ' • ' : '') +
+        t('invoices.room') + ' ' + (room ? room.number : '—') + ' — ' + tenantName(tenant) +
+        (billed ? ' (' + t('invoices.statusExists') + ')' : '');
+    }
+
+    function buildRoomOptions(period, selectedTenancyId) {
+      var list = tenanciesForPeriod(period);
+      if (!list.length) return option('', t('invoices.noActiveTenancies'), '');
+      var chosen = selectedTenancyId;
+      if (!chosen || !list.some(function (item) { return item.id === chosen; })) {
+        var unbilled = list.find(function (item) {
+          return !Store.getInvoices().some(function (inv) {
+            return inv.status !== 'cancelled' && inv.billingPeriod === period &&
+              (inv.tenancyId === item.id || inv.roomId === item.roomId);
+          });
+        });
+        chosen = (unbilled || list[0]).id;
+      }
+      return list.map(function (tenancy) {
+        return option(tenancy.id, roomOptionLabel(tenancy, period), chosen);
+      }).join('');
+    }
+
+    var initialList = tenanciesForPeriod(defaultPeriod);
+    var firstTenancy = (initialList.find(function (item) {
+      return !Store.getInvoices().some(function (inv) {
+        return inv.status !== 'cancelled' && inv.billingPeriod === defaultPeriod &&
+          (inv.tenancyId === item.id || inv.roomId === item.roomId);
+      });
+    }) || initialList[0] || activeTenancies[0]);
+
+    var issueDate = defaultPeriod + '-03';
+    if (defaultPeriod === Store.getMeta().currentPeriod && todayIso() < issueDate) issueDate = todayIso();
+    var dueDate = F.addMonths(defaultPeriod, 1) + '-05';
+    var initialSummary = firstTenancy
+      ? Store.getPreviousUtilitySummary(firstTenancy.roomId, defaultPeriod)
+      : null;
+
+    var handle = modalForm({
+      title: t('invoices.createTitle'),
+      kicker: t('mgmt.phase', { phase: 5 }),
+      submitKey: 'invoices.create',
+      size: 'xl',
+      intro: t('invoices.createHint'),
+      body:
+        formField(t('invoices.filterPeriod'), selectInput('period', Store.monthOptions().map(function (item) {
+          return option(item, F.monthLabel(item), defaultPeriod);
+        }).join(''))) +
+        formField(t('invoices.selectRoom'), selectInput('tenancyId', buildRoomOptions(defaultPeriod, firstTenancy ? firstTenancy.id : ''))) +
+        formField(t('rooms.rent'), numberInput('rent', firstTenancy ? firstTenancy.monthlyRent : 0)) +
+        formField(t('invoices.readingDate'), dateInput('readingDate', todayIso())) +
+        formField(t('invoices.issueDate'), dateInput('issueDate', issueDate)) +
+        formField(t('invoices.dueDate'), dateInput('dueDate', dueDate)) +
+        '<div class="mgmt-field-wide" id="invoiceUtilityMount">' +
+          utilityInputSectionMarkup(initialSummary) +
+        '</div>' +
+        formField(t('invoices.otherCharges'), numberInput('otherCharges', 0)) +
+        formField(t('invoices.discount'), numberInput('discount', 0)) +
+        formField(t('invoices.lateFee'), numberInput('lateFee', 0)) +
+        formField(t('invoices.previousBalance'), numberInput('previousBalance', 0)) +
+        '<div class="mgmt-field-wide">' + formField(t('common.notes'), textareaInput('notes', '', 2)) + '</div>' +
+        '<div class="mgmt-field-wide">' + liveTotalBarMarkup() + '</div>',
+      onSubmit: function (dialog) {
+        var period = formValue(dialog, 'period');
+        var tenancyId = formValue(dialog, 'tenancyId');
+        var tenancy = Store.getTenancies().find(function (item) { return item.id === tenancyId; });
+        var result = Store.createInvoice({
+          period: period,
+          tenancyId: tenancyId,
+          roomId: tenancy ? tenancy.roomId : null,
+          issueDate: formValue(dialog, 'issueDate'),
+          dueDate: formValue(dialog, 'dueDate'),
+          readingDate: formValue(dialog, 'readingDate'),
+          rent: formNumber(dialog, 'rent'),
+          electricityCurrent: formValue(dialog, 'electricityCurrent'),
+          electricityRate: formValue(dialog, 'electricityRate'),
+          waterCurrent: formValue(dialog, 'waterCurrent'),
+          waterRate: formValue(dialog, 'waterRate'),
+          otherCharges: formNumber(dialog, 'otherCharges'),
+          discount: formNumber(dialog, 'discount'),
+          lateFee: formNumber(dialog, 'lateFee'),
+          previousBalance: formNumber(dialog, 'previousBalance'),
+          notes: formValue(dialog, 'notes')
+        });
+        if (handleResult(result, 'mgmt.created')) UI.closeModal();
+      }
+    });
+
+    if (handle && handle.dialog) {
+      var dialog = handle.dialog;
+      var calc = wireInvoiceUtilityLiveCalc(dialog);
+      var periodSel = dialog.querySelector('[name="period"]');
+      var tenancySel = dialog.querySelector('[name="tenancyId"]');
+      var rentInput = dialog.querySelector('[name="rent"]');
+      var issueInput = dialog.querySelector('[name="issueDate"]');
+      var dueInput = dialog.querySelector('[name="dueDate"]');
+      var mount = dialog.querySelector('#invoiceUtilityMount');
+
+      function refreshUtilityInputs() {
+        var period = periodSel ? periodSel.value : defaultPeriod;
+        var tenancy = Store.getTenancies().find(function (item) { return item.id === (tenancySel ? tenancySel.value : ''); });
+        if (!tenancy) {
+          if (mount) mount.innerHTML = '';
+          calc.update();
+          return;
+        }
+        if (rentInput) rentInput.value = tenancy.monthlyRent;
+        var summary = Store.getPreviousUtilitySummary(tenancy.roomId, period);
+        if (mount) {
+          mount.innerHTML = utilityInputSectionMarkup(summary);
+          Icons.hydrate(mount);
+        }
+        calc.update();
+      }
+
+      if (periodSel) {
+        periodSel.addEventListener('change', function () {
+          var period = periodSel.value;
+          if (tenancySel) tenancySel.innerHTML = buildRoomOptions(period, tenancySel.value);
+          var nextIssue = period + '-03';
+          if (period === Store.getMeta().currentPeriod && todayIso() < nextIssue) nextIssue = todayIso();
+          if (issueInput) issueInput.value = nextIssue;
+          if (dueInput) dueInput.value = F.addMonths(period, 1) + '-05';
+          refreshUtilityInputs();
+        });
+      }
+      if (tenancySel) {
+        tenancySel.addEventListener('change', refreshUtilityInputs);
+      }
+    }
+  }
+
   function openGenerateForm() {
     var filters = filtersFor('invoices');
-    var period = filters.period === 'all' ? Store.getMeta().currentPeriod : filters.period;
-    var issueDate = period + '-03';
-    if (period === Store.getMeta().currentPeriod && todayIso() < issueDate) issueDate = todayIso();
-    var dueDate = F.addMonths(period, 1) + '-05';
+    var defaultPeriod = filters.period === 'all' ? Store.getMeta().currentPeriod : filters.period;
+    var issueDate = defaultPeriod + '-03';
+    if (defaultPeriod === Store.getMeta().currentPeriod && todayIso() < issueDate) issueDate = todayIso();
+    var dueDate = F.addMonths(defaultPeriod, 1) + '-05';
 
-    modalForm({
+    function renderBatchRooms(period, locationId) {
+      var tenancies = Store.getTenancies().filter(function (tenancy) {
+        return tenancy.status === 'active' && tenancyCoversPeriodLocal(tenancy, period) &&
+          (locationId === 'all' || tenancy.locationId === locationId);
+      });
+      if (!tenancies.length) {
+        return '<div class="empty-inline">' + esc(t('invoices.noActiveTenancies')) + '</div>';
+      }
+      var rowsHtml = tenancies.map(function (tenancy) {
+        var room = Store.getRoom(tenancy.roomId);
+        var tenant = Store.getTenant(tenancy.tenantId);
+        if (!room) return '';
+        var existingInv = Store.getInvoices().find(function (inv) {
+          return inv.status !== 'cancelled' && inv.billingPeriod === period &&
+            (inv.tenancyId === tenancy.id || inv.roomId === room.id);
+        });
+        var summary = Store.getPreviousUtilitySummary(room.id, period);
+        var eInfo = summary.electricity;
+        var wInfo = summary.water;
+        var eLast = eInfo.lastMonth || eInfo.latestPrior;
+        var wLast = wInfo.lastMonth || wInfo.latestPrior;
+        var eCurr = eInfo.current ? eInfo.current.current : '';
+        var wCurr = wInfo.current ? wInfo.current.current : '';
+        var hasSaved = !!(eInfo.current && wInfo.current);
+        var statusTag = existingInv
+          ? '<span class="batch-status is-exists">' + esc(t('invoices.statusExists')) + '</span>'
+          : (hasSaved
+            ? '<span class="batch-status is-ready">' + esc(t('invoices.statusReady')) + '</span>'
+            : '<span class="batch-status is-missing">' + esc(t('invoices.statusMissing')) + '</span>');
+
+        return '<tr data-batch-room="' + esc(room.id) + '" data-billed="' + (existingInv ? '1' : '0') + '">' +
+          '<td><strong>' + esc(t('invoices.room')) + ' ' + esc(room.number) + '</strong>' +
+            '<small class="cell-sub">' + esc(tenantName(tenant)) + ' • ' + money(tenancy.monthlyRent) + '</small>' +
+            statusTag + '</td>' +
+          '<td>' +
+            '<div class="batch-last-line">' +
+              '<small>' + esc(t('invoices.lastMonthData')) + ': ' +
+                (eLast ? esc(F.number(eLast.consumption, 2) + ' ' + t('common.kwh')) + ' (' + esc(F.number(eLast.current, 0)) + ')' : esc(t('invoices.noLastMonth'))) +
+              '</small>' +
+            '</div>' +
+            '<div class="batch-input-line">' +
+              '<span class="batch-prev">' + esc(F.number(eInfo.previousValue, 0)) + ' →</span>' +
+              '<input type="number" step="0.01" min="' + esc(eInfo.previousValue) + '" data-batch-utility="electricity" ' +
+                'data-prev="' + esc(eInfo.previousValue) + '" data-rate="' + esc(eInfo.rate) + '" ' +
+                'value="' + esc(eCurr) + '" placeholder="' + esc(F.number(eInfo.previousValue, 0)) + '"' +
+                (existingInv ? ' disabled' : '') + '>' +
+              '<span class="batch-calc" data-batch-calc="electricity">' +
+                (eInfo.current ? money(eInfo.current.amount) : '—') + '</span>' +
+            '</div>' +
+          '</td>' +
+          '<td>' +
+            '<div class="batch-last-line">' +
+              '<small>' + esc(t('invoices.lastMonthData')) + ': ' +
+                (wLast ? esc(F.number(wLast.consumption, 2) + ' ' + t('common.m3')) + ' (' + esc(F.number(wLast.current, 0)) + ')' : esc(t('invoices.noLastMonth'))) +
+              '</small>' +
+            '</div>' +
+            '<div class="batch-input-line">' +
+              '<span class="batch-prev">' + esc(F.number(wInfo.previousValue, 0)) + ' →</span>' +
+              '<input type="number" step="0.01" min="' + esc(wInfo.previousValue) + '" data-batch-utility="water" ' +
+                'data-prev="' + esc(wInfo.previousValue) + '" data-rate="' + esc(wInfo.rate) + '" ' +
+                'value="' + esc(wCurr) + '" placeholder="' + esc(F.number(wInfo.previousValue, 0)) + '"' +
+                (existingInv ? ' disabled' : '') + '>' +
+              '<span class="batch-calc" data-batch-calc="water">' +
+                (wInfo.current ? money(wInfo.current.amount) : '—') + '</span>' +
+            '</div>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+
+      return '<div class="batch-meter-wrap">' +
+        '<p class="batch-hint">' + esc(t('invoices.batchReadingsHint')) + '</p>' +
+        '<div class="table-wrap">' +
+          '<table class="data-table batch-meter-table">' +
+            '<thead><tr>' +
+              '<th>' + esc(t('invoices.room')) + ' / ' + esc(t('invoices.tenant')) + '</th>' +
+              '<th>' + esc(t('meters.electricity')) + ' (' + esc(t('common.kwh')) + ')</th>' +
+              '<th>' + esc(t('meters.water')) + ' (' + esc(t('common.m3')) + ')</th>' +
+            '</tr></thead>' +
+            '<tbody>' + rowsHtml + '</tbody>' +
+          '</table>' +
+        '</div>' +
+      '</div>';
+    }
+
+    var handle = modalForm({
       title: t('invoices.generateTitle'),
       kicker: t('mgmt.phase', { phase: 5 }),
       submitKey: 'invoices.generate',
+      size: 'xl',
       intro: t('invoices.generateHint'),
       body:
         formField(t('invoices.filterPeriod'), selectInput('period', Store.monthOptions().map(function (item) {
-          return option(item, F.monthLabel(item), period);
+          return option(item, F.monthLabel(item), defaultPeriod);
         }).join(''))) +
         formField(t('invoices.filterLocation'), selectInput('locationId', locationOptions('all', true))) +
         formField(t('invoices.issueDate'), dateInput('issueDate', issueDate)) +
         formField(t('invoices.dueDate'), dateInput('dueDate', dueDate)) +
+        formField(t('invoices.readingDate'), dateInput('readingDate', todayIso())) +
         formField(t('invoices.otherCharges'), numberInput('otherCharges', 0)) +
         formField(t('invoices.discount'), numberInput('discount', 0)) +
-        '<div class="mgmt-field-wide">' + formField(t('common.notes'), textareaInput('notes', '')) + '</div>',
+        '<div class="mgmt-field-wide" id="batchRoomsMount">' + renderBatchRooms(defaultPeriod, 'all') + '</div>' +
+        '<div class="mgmt-field-wide">' + formField(t('common.notes'), textareaInput('notes', '', 2)) + '</div>',
       onSubmit: function (dialog) {
+        var readings = [];
+        dialog.querySelectorAll('[data-batch-room]').forEach(function (row) {
+          if (row.getAttribute('data-billed') === '1') return;
+          var roomId = row.getAttribute('data-batch-room');
+          var eInput = row.querySelector('[data-batch-utility="electricity"]');
+          var wInput = row.querySelector('[data-batch-utility="water"]');
+          var eVal = eInput ? String(eInput.value).trim() : '';
+          var wVal = wInput ? String(wInput.value).trim() : '';
+          if (eVal !== '' || wVal !== '') {
+            var entry = { roomId: roomId };
+            if (eVal !== '') entry.electricityCurrent = eVal;
+            if (wVal !== '') entry.waterCurrent = wVal;
+            readings.push(entry);
+          }
+        });
         var result = Store.generateInvoices({
           period: formValue(dialog, 'period'),
           locationId: formValue(dialog, 'locationId'),
           issueDate: formValue(dialog, 'issueDate'),
           dueDate: formValue(dialog, 'dueDate'),
+          readingDate: formValue(dialog, 'readingDate'),
           otherCharges: formNumber(dialog, 'otherCharges'),
           discount: formNumber(dialog, 'discount'),
-          notes: formValue(dialog, 'notes')
+          notes: formValue(dialog, 'notes'),
+          readings: readings
         });
         if (!result || result.ok === false) {
           UI.toast(errorText(result), 'error');
@@ -1326,6 +1847,48 @@
         }
       }
     });
+
+    if (handle && handle.dialog) {
+      var dialog = handle.dialog;
+      var periodSel = dialog.querySelector('[name="period"]');
+      var locSel = dialog.querySelector('[name="locationId"]');
+      var issueInput = dialog.querySelector('[name="issueDate"]');
+      var dueInput = dialog.querySelector('[name="dueDate"]');
+      var mount = dialog.querySelector('#batchRoomsMount');
+
+      function refreshBatch() {
+        var period = periodSel ? periodSel.value : defaultPeriod;
+        var locId = locSel ? locSel.value : 'all';
+        if (mount) mount.innerHTML = renderBatchRooms(period, locId);
+      }
+      if (periodSel) {
+        periodSel.addEventListener('change', function () {
+          var period = periodSel.value;
+          var nextIssue = period + '-03';
+          if (period === Store.getMeta().currentPeriod && todayIso() < nextIssue) nextIssue = todayIso();
+          if (issueInput) issueInput.value = nextIssue;
+          if (dueInput) dueInput.value = F.addMonths(period, 1) + '-05';
+          refreshBatch();
+        });
+      }
+      if (locSel) locSel.addEventListener('change', refreshBatch);
+      dialog.addEventListener('input', function (event) {
+        var input = event.target.closest('[data-batch-utility]');
+        if (!input) return;
+        var row = input.closest('[data-batch-room]');
+        var utility = input.getAttribute('data-batch-utility');
+        var calcNode = row ? row.querySelector('[data-batch-calc="' + utility + '"]') : null;
+        if (!calcNode) return;
+        if (String(input.value).trim() === '') {
+          calcNode.textContent = '—';
+          return;
+        }
+        var prev = Number(input.getAttribute('data-prev')) || 0;
+        var rate = Number(input.getAttribute('data-rate')) || 0;
+        var usage = Math.max(Number(input.value) - prev, 0);
+        calcNode.textContent = money(usage * rate);
+      });
+    }
   }
 
   function invoiceItemsMarkup(details) {
@@ -1377,6 +1940,10 @@
         detailItem(t('details.phone'), invoice.tenant ? F.phone(invoice.tenant.phone) : '—') +
         detailItem(t('invoices.issueDate'), F.date(invoice.issueDate)) +
         detailItem(t('invoices.dueDate'), F.date(invoice.dueDate)) +
+        detailItem(t('common.updatedAt'), F.dateTime(invoice.updatedAt)) +
+      '</div>' +
+      '<div class="detail-section"><h3>' + esc(t('invoices.utilityComparison')) + '</h3>' +
+        utilityComparisonMarkup(details) +
       '</div>' +
       '<div class="detail-section"><h3>' + esc(t('invoices.breakdown')) + '</h3>' +
         '<div class="line-items">' + invoiceItemsMarkup(details) + '</div>' +
@@ -1400,8 +1967,12 @@
       footer:
         '<button type="button" class="button button-ghost" data-mgmt="invoice-copy" data-id="' +
           esc(invoice.id) + '">' + icon('copy', 15) + '<span>' + esc(t('invoices.copyNumber')) + '</span></button>' +
-        '<button type="button" class="button button-ghost" data-mgmt="invoice-edit" data-id="' +
-          esc(invoice.id) + '">' + esc(t('common.edit')) + '</button>' +
+        '<button type="button" class="button button-secondary" data-mgmt="invoice-print" data-id="' +
+          esc(invoice.id) + '">' + icon('printer', 15) + '<span>' + esc(t('invoices.printPdf')) + '</span></button>' +
+        (invoice.displayStatus !== 'cancelled'
+          ? '<button type="button" class="button button-ghost" data-mgmt="invoice-edit" data-id="' +
+            esc(invoice.id) + '">' + icon('edit', 15) + '<span>' + esc(t('invoices.editUsage')) + '</span></button>'
+          : '') +
         (canCancel ? '<button type="button" class="button button-ghost" data-mgmt="invoice-cancel" data-id="' +
           esc(invoice.id) + '">' + esc(t('invoices.cancel')) + '</button>' : '') +
         (canPay ? '<button type="button" class="button button-primary" data-mgmt="invoice-pay" data-id="' +
@@ -1416,29 +1987,237 @@
   }
 
   function openInvoiceEdit(invoiceId) {
-    var invoice = Store.getInvoice(invoiceId);
-    if (!invoice) { UI.toast(t('mgmt.notFound'), 'error'); return; }
-    modalForm({
+    var details = Store.getInvoiceDetails(invoiceId);
+    if (!details) { UI.toast(t('mgmt.notFound'), 'error'); return; }
+    var invoice = details.invoice;
+    var summary = Store.getPreviousUtilitySummary(invoice.roomId, invoice.billingPeriod);
+    var eRec = details.readings ? details.readings.electricity : null;
+    var wRec = details.readings ? details.readings.water : null;
+    var eCurr = eRec ? eRec.current : ((invoice.electricity && invoice.electricity.current > 0) ? invoice.electricity.current : '');
+    var wCurr = wRec ? wRec.current : ((invoice.water && invoice.water.current > 0) ? invoice.water.current : '');
+    var eRate = invoice.electricity && invoice.electricity.rate ? invoice.electricity.rate : summary.electricity.rate;
+    var wRate = invoice.water && invoice.water.rate ? invoice.water.rate : summary.water.rate;
+    var readingDate = (eRec && eRec.readingDate) || (wRec && wRec.readingDate) || invoice.issueDate || todayIso();
+
+    var handle = modalForm({
       title: t('invoices.editTitle'),
       kicker: invoice.invoiceNumber,
+      subtitle: (invoice.tenant ? tenantName(invoice.tenant) : '') + ' • ' +
+        t('invoices.room') + ' ' + invoice.roomLabel + ' • ' + F.monthLabel(invoice.billingPeriod),
       submitKey: 'common.update',
+      size: 'xl',
       body:
+        formField(t('rooms.rent'), numberInput('rent', invoice.rent)) +
+        formField(t('invoices.readingDate'), dateInput('readingDate', readingDate)) +
+        '<div class="mgmt-field-wide">' +
+          utilityInputSectionMarkup(summary, {
+            electricityCurrent: eCurr,
+            electricityRate: eRate,
+            waterCurrent: wCurr,
+            waterRate: wRate
+          }) +
+        '</div>' +
         formField(t('invoices.otherCharges'), numberInput('otherCharges', invoice.otherCharges)) +
         formField(t('invoices.discount'), numberInput('discount', invoice.discount)) +
         formField(t('invoices.lateFee'), numberInput('lateFee', invoice.lateFee)) +
         formField(t('invoices.previousBalance'), numberInput('previousBalance', invoice.previousBalance)) +
         formField(t('invoices.dueDate'), dateInput('dueDate', invoice.dueDate)) +
-        '<div class="mgmt-field-wide">' + formField(t('common.notes'), textareaInput('notes', invoice.notes)) + '</div>',
+        '<div class="mgmt-field-wide">' + formField(t('common.notes'), textareaInput('notes', invoice.notes, 2)) + '</div>' +
+        '<div class="mgmt-field-wide">' + liveTotalBarMarkup() + '</div>',
       onSubmit: function (dialog) {
-        var result = Store.updateInvoice(invoice.id, {
+        var patch = {
+          rent: formNumber(dialog, 'rent'),
+          readingDate: formValue(dialog, 'readingDate'),
           otherCharges: formNumber(dialog, 'otherCharges'),
           discount: formNumber(dialog, 'discount'),
           lateFee: formNumber(dialog, 'lateFee'),
           previousBalance: formNumber(dialog, 'previousBalance'),
           dueDate: formValue(dialog, 'dueDate'),
           notes: formValue(dialog, 'notes')
-        });
+        };
+        var eVal = formValue(dialog, 'electricityCurrent');
+        if (String(eVal).trim() !== '') {
+          patch.electricityCurrent = eVal;
+          patch.electricityRate = formNumber(dialog, 'electricityRate');
+        }
+        var wVal = formValue(dialog, 'waterCurrent');
+        if (String(wVal).trim() !== '') {
+          patch.waterCurrent = wVal;
+          patch.waterRate = formNumber(dialog, 'waterRate');
+        }
+        var result = Store.updateInvoice(invoice.id, patch);
         if (handleResult(result, 'mgmt.updated')) UI.closeModal();
+      }
+    });
+
+    if (handle && handle.dialog) {
+      wireInvoiceUtilityLiveCalc(handle.dialog);
+    }
+  }
+
+  function renderInvoicePdfMarkup(details) {
+    var invoice = details.invoice;
+    var settings = Store.getSettings();
+    var company = langPick(settings.companyNameKm, settings.companyNameEn) || RRMS.Config.appName(lang());
+    var companyAlt = lang() === 'en' ? settings.companyNameKm : settings.companyNameEn;
+    var tenant = invoice.tenant;
+    var loc = invoice.location;
+    var prev = details.previousMonth || {};
+    var eLast = prev.electricity;
+    var wLast = prev.water;
+
+    var rowsHtml = details.items.map(function (item) {
+      return '<tr>' +
+        '<td>' + esc(t(item.labelKey)) + '</td>' +
+        '<td>' + esc(item.meta || '—') + '</td>' +
+        '<td class="align-right ' + (item.amount < 0 ? 'text-success' : '') + '">' + money(item.amount) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var compareHtml =
+      '<div class="pdf-compare-box">' +
+        '<h4>' + esc(t('invoices.utilityComparison')) + '</h4>' +
+        '<div class="pdf-compare-grid">' +
+          '<div class="pdf-compare-item">' +
+            '<strong>' + esc(t('meters.electricity')) + '</strong>' +
+            '<span>' + esc(t('invoices.lastMonthData')) + ': ' +
+              (eLast ? esc(F.number(eLast.consumption, 2) + ' ' + t('common.kwh')) + ' (' + money(eLast.amount) + ')' : esc(t('invoices.noLastMonth'))) +
+            '</span>' +
+            '<span>' + esc(t('invoices.thisMonthInput')) + ': ' +
+              esc(F.number(invoice.electricity.consumption, 2) + ' ' + t('common.kwh')) +
+              ' (' + esc(F.number(invoice.electricity.previous, 0) + ' → ' + F.number(invoice.electricity.current, 0)) + ')</span>' +
+          '</div>' +
+          '<div class="pdf-compare-item">' +
+            '<strong>' + esc(t('meters.water')) + '</strong>' +
+            '<span>' + esc(t('invoices.lastMonthData')) + ': ' +
+              (wLast ? esc(F.number(wLast.consumption, 2) + ' ' + t('common.m3')) + ' (' + money(wLast.amount) + ')' : esc(t('invoices.noLastMonth'))) +
+            '</span>' +
+            '<span>' + esc(t('invoices.thisMonthInput')) + ': ' +
+              esc(F.number(invoice.water.consumption, 2) + ' ' + t('common.m3')) +
+              ' (' + esc(F.number(invoice.water.previous, 0) + ' → ' + F.number(invoice.water.current, 0)) + ')</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    var paymentsHtml = details.payments.length
+      ? '<div class="pdf-payments"><h4>' + esc(t('invoices.paymentsTitle')) + '</h4><ul>' +
+          details.payments.map(function (payment) {
+            return '<li><span>' + esc(payment.paymentNumber) + ' • ' + esc(F.date(payment.date)) + ' • ' +
+              esc(t('method.' + payment.method)) + (payment.reference ? ' (' + esc(payment.reference) + ')' : '') + '</span>' +
+              '<strong>' + money(payment.amount) + '</strong></li>';
+          }).join('') +
+        '</ul></div>'
+      : '';
+
+    return '<article class="invoice-pdf-sheet" data-pdf-invoice="' + esc(invoice.id) + '">' +
+      '<header class="pdf-header">' +
+        '<div class="pdf-brand">' +
+          '<h2>' + esc(company) + '</h2>' +
+          (companyAlt && companyAlt !== company ? '<p class="pdf-brand-sub">' + esc(companyAlt) + '</p>' : '') +
+          '<p>' + esc(locationName(loc)) + (locationAddress(loc) ? ' • ' + esc(locationAddress(loc)) : '') + '</p>' +
+          (loc && loc.contactPhone ? '<p>' + esc(t('details.phone')) + ': ' + esc(F.phone(loc.contactPhone)) + '</p>' : '') +
+        '</div>' +
+        '<div class="pdf-title-box">' +
+          '<span class="pdf-doc-label">' + esc(t('invoices.detailTitle')) + '</span>' +
+          '<h3>' + esc(invoice.invoiceNumber) + '</h3>' +
+          UI.statusBadge(invoice.displayStatus, t) +
+        '</div>' +
+      '</header>' +
+      '<div class="pdf-meta-grid">' +
+        '<div class="pdf-meta-card">' +
+          '<small>' + esc(t('invoices.pdfBillTo')) + '</small>' +
+          '<strong>' + esc(tenant ? tenantName(tenant) : '—') + '</strong>' +
+          '<p>' + esc(t('invoices.room')) + ': ' + esc(invoice.roomLabel) + '</p>' +
+          '<p>' + esc(t('details.phone')) + ': ' + esc(tenant ? F.phone(tenant.phone) : '—') + '</p>' +
+        '</div>' +
+        '<div class="pdf-meta-card">' +
+          '<small>' + esc(t('invoices.period')) + ': <strong>' + esc(F.monthLabel(invoice.billingPeriod)) + '</strong></small>' +
+          '<p>' + esc(t('invoices.issueDate')) + ': ' + esc(F.date(invoice.issueDate)) + '</p>' +
+          '<p>' + esc(t('invoices.dueDate')) + ': ' + esc(F.date(invoice.dueDate)) + '</p>' +
+          '<p>' + esc(t('common.updatedAt')) + ': ' + esc(F.dateTime(invoice.updatedAt)) + '</p>' +
+        '</div>' +
+      '</div>' +
+      '<table class="pdf-table">' +
+        '<thead><tr>' +
+          '<th>' + esc(t('invoices.pdfDescription')) + '</th>' +
+          '<th>' + esc(t('invoices.pdfReadingDetails')) + '</th>' +
+          '<th class="align-right">' + esc(t('invoices.amount')) + '</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rowsHtml + '</tbody>' +
+      '</table>' +
+      compareHtml +
+      '<div class="pdf-totals">' +
+        '<div><span>' + esc(t('invoices.total')) + '</span><strong>' + money(invoice.total) + '</strong></div>' +
+        '<div><span>' + esc(t('invoices.pdfKhrEquivalent')) + '</span><span>' + esc(F.moneyKhr(invoice.total)) + '</span></div>' +
+        '<div><span>' + esc(t('invoices.paidAmount')) + '</span><span class="text-success">' + money(invoice.paid) + '</span></div>' +
+        '<div class="pdf-balance"><span>' + esc(t('invoices.balance')) + '</span><strong>' + money(invoice.balance) + '</strong></div>' +
+      '</div>' +
+      paymentsHtml +
+      (invoice.notes ? '<p class="pdf-notes"><strong>' + esc(t('common.notes')) + ':</strong> ' + esc(invoice.notes) + '</p>' : '') +
+      '<footer class="pdf-footer">' +
+        '<div class="pdf-sign"><span>' + esc(t('invoices.pdfPreparedBy')) + '</span><div class="pdf-sign-line"></div></div>' +
+        '<div class="pdf-sign"><span>' + esc(t('invoices.pdfTenantSign')) + '</span><div class="pdf-sign-line"></div></div>' +
+      '</footer>' +
+      '<p class="pdf-printed-at">' + esc(t('invoices.pdfPrintedAt')) + ': ' + esc(F.dateTime(new Date().toISOString())) + '</p>' +
+    '</article>';
+  }
+
+  function triggerInvoicePrint(details) {
+    var root = document.getElementById('printInvoiceRoot');
+    if (!root) {
+      root = document.createElement('div');
+      root.id = 'printInvoiceRoot';
+      root.className = 'print-invoice-root';
+      document.body.appendChild(root);
+    }
+    root.innerHTML = renderInvoicePdfMarkup(details);
+    root.hidden = false;
+    document.body.classList.add('print-invoice-mode');
+    Icons.hydrate(root);
+
+    var cleaned = false;
+    function cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      document.body.classList.remove('print-invoice-mode');
+      root.hidden = true;
+      root.innerHTML = '';
+      window.removeEventListener('afterprint', cleanup);
+    }
+
+    window.addEventListener('afterprint', cleanup);
+    try {
+      window.print();
+    } finally {
+      window.setTimeout(cleanup, 300);
+    }
+  }
+
+  function openInvoicePdfPreview(invoiceId) {
+    var details = Store.getInvoiceDetails(invoiceId);
+    if (!details) { UI.toast(t('mgmt.notFound'), 'error'); return; }
+    var invoice = details.invoice;
+
+    UI.modal({
+      title: t('invoices.pdfPreviewTitle'),
+      kicker: invoice.invoiceNumber,
+      subtitle: t('invoices.pdfHint'),
+      size: 'xl',
+      body: '<div class="pdf-preview-wrap">' + renderInvoicePdfMarkup(details) + '</div>',
+      footer:
+        '<button type="button" class="button button-ghost" data-close-modal>' +
+          esc(t('common.close')) + '</button>' +
+        '<button type="button" class="button button-primary" data-confirm-print>' +
+          icon('printer', 16) + '<span>' + esc(t('invoices.pdfSaveButton')) + '</span></button>',
+      onOpen: function (dialog) {
+        var close = dialog.querySelector('[data-close-modal]');
+        if (close) close.addEventListener('click', UI.closeModal);
+        var printBtn = dialog.querySelector('[data-confirm-print]');
+        if (printBtn) {
+          printBtn.addEventListener('click', function () {
+            triggerInvoicePrint(details);
+          });
+        }
       }
     });
   }
@@ -1547,6 +2326,7 @@
         { label: t('payments.room') },
         { label: t('payments.method') },
         { label: t('payments.amount'), align: 'right' },
+        { label: t('common.updatedAt') },
         { label: t('common.actions'), align: 'right' }
       ], rows.map(function (row) {
         var payment = row.payment;
@@ -1563,6 +2343,7 @@
           cell(t('payments.room'), row.room ? row.room.number : '—') +
           cell(t('payments.method'), t('method.' + payment.method)) +
           cell(t('payments.amount'), money(payment.amount), 'align-right text-success') +
+          cell(t('common.updatedAt'), F.shortDateTime(payment.updatedAt), 'cell-updated') +
           '<td data-label="' + esc(t('common.actions')) + '" class="align-right"><div class="row-actions">' +
             actionButton('payment-del', payment.id, 'x', 'common.delete', 'is-danger') +
           '</div></td>' +
@@ -1819,6 +2600,7 @@
     }
     var lines = [];
     lines.push([t('reports.title'), F.monthLabel(data.period)].map(csvCell).join(','));
+    lines.push([t('common.lastChanged'), F.dateTime(Store.getLastUpdated('reports'))].map(csvCell).join(','));
     lines.push('');
     lines.push([t('reports.billed'), data.summary.monthlyBilled].map(csvCell).join(','));
     lines.push([t('reports.collected'), data.summary.collected].map(csvCell).join(','));
@@ -1937,6 +2719,8 @@
         detailItem(t('settings.phase'), String(RRMS.Config.phase)) +
         detailItem(t('settings.dataSource'), t('settings.dataSourceDemo')) +
         detailItem(t('app.short'), RRMS.Config.appName(lang())) +
+        detailItem(t('common.lastChanged'), F.dateTime(Store.getLastUpdated('settings'))) +
+        detailItem(t('common.updatedAt'), F.dateTime(Store.getLastUpdated('overall'))) +
       '</div>'
     );
 
@@ -2051,8 +2835,10 @@
     }
     if (action === 'reading-save-all') return saveAllReadings();
 
+    if (action === 'invoice-create') return openCreateInvoiceForm();
     if (action === 'invoice-generate') return openGenerateForm();
     if (action === 'invoice-view') return openInvoiceDetail(id);
+    if (action === 'invoice-print') return openInvoicePdfPreview(id);
     if (action === 'invoice-edit') return openInvoiceEdit(id);
     if (action === 'invoice-pay') return openPaymentForm(id);
     if (action === 'invoice-pay-new') return openPaymentForm();
@@ -2312,7 +3098,7 @@
       else if (target === 'rooms') openRoomForm();
       else if (target === 'tenants') openTenantForm();
       else if (target === 'tenancies') openTenancyForm();
-      else if (target === 'invoices') openGenerateForm();
+      else if (target === 'invoices') openCreateInvoiceForm();
       else if (target === 'payments') openPaymentForm();
       else if (target === 'meters') {
         var first = moduleEl.querySelector('[data-reading]');
@@ -2333,6 +3119,10 @@
     navigate: navigate,
     openCreate: openCreate,
     openEntity: openEntity,
+    openCreateInvoiceForm: openCreateInvoiceForm,
+    openInvoiceEdit: openInvoiceEdit,
+    openInvoicePdfPreview: openInvoicePdfPreview,
+    renderInvoicePdfMarkup: renderInvoicePdfMarkup,
     getRoute: function () { return state.route; },
     isModuleActive: function () { return state.route !== 'dashboard'; }
   };

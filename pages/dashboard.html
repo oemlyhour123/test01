@@ -151,6 +151,10 @@
             <p class="page-subtitle" data-i18n="dashboard.subtitle"></p>
           </div>
           <div class="page-actions">
+            <span class="period-chip last-updated-chip" id="dashboardLastUpdatedChip">
+              <span data-icon="clock" data-size="16"></span>
+              <span id="dashboardLastUpdated">—</span>
+            </span>
             <span class="period-chip">
               <span data-icon="calendar" data-size="16"></span>
               <span id="periodLabel">—</span>
@@ -348,6 +352,8 @@
   <button type="button" class="fab" id="fabButton" aria-label="បន្ថែមថ្មី" data-i18n-aria-label="fab.label">
     <span data-icon="plus" data-size="24"></span>
   </button>
+
+  <div id="printInvoiceRoot" class="print-invoice-root" hidden></div>
 
   <script src="../js/config.js"></script>
   <script src="../js/icons.js"></script>

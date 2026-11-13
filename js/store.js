@@ -75,13 +75,49 @@
     });
   }
 
+  function nowIso() {
+    return new Date().toISOString();
+  }
+
+  function touchScope(scopes, timestamp) {
+    var current = load();
+    if (!current.meta.lastModified || typeof current.meta.lastModified !== 'object') {
+      current.meta.lastModified = {};
+    }
+    var ts = timestamp || nowIso();
+    var list = Array.isArray(scopes) ? scopes.slice() : [scopes];
+    var map = current.meta.lastModified;
+    list.forEach(function (scope) {
+      if (!scope) return;
+      map[scope] = ts;
+      if (scope === 'invoices' || scope === 'payments') {
+        map.reports = ts;
+        map.dashboard = ts;
+      } else if (scope === 'locations' || scope === 'rooms' || scope === 'tenancies' || scope === 'meters') {
+        map.dashboard = ts;
+      }
+    });
+    map.overall = ts;
+    return ts;
+  }
+
+  function getLastUpdated(scope) {
+    var meta = getMeta();
+    var map = meta.lastModified || {};
+    var key = scope || 'overall';
+    if (map[key]) return map[key];
+    if (map.overall) return map.overall;
+    return meta.generatedAt || null;
+  }
+
   function persist() {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
         app: 'RRMS',
         version: Config.version,
         seedDate: data.meta.seedDate,
-        savedAt: new Date().toISOString(),
+        savedAt: nowIso(),
+        lastModified: data.meta.lastModified || {},
         data: {
           locations: data.locations,
           rooms: data.rooms,
@@ -121,6 +157,9 @@
     });
     if (payload.data.settings && typeof payload.data.settings === 'object') {
       Object.assign(target.settings, payload.data.settings);
+    }
+    if (payload.lastModified && typeof payload.lastModified === 'object') {
+      target.meta.lastModified = Object.assign({}, target.meta.lastModified || {}, payload.lastModified);
     }
   }
 
@@ -361,6 +400,49 @@
     return items;
   }
 
+  function getPreviousUtilitySummary(roomId, period) {
+    var targetPeriod = period || getMeta().currentPeriod;
+    var prevPeriod = F.addMonths(targetPeriod, -1);
+    var allReadings = load().readings.filter(function (item) { return item.roomId === roomId; });
+    var room = getRoom(roomId);
+    var location = room ? getLocation(room.locationId) : null;
+    var settings = getSettings();
+
+    function findUtility(utility) {
+      var exactPrev = allReadings.find(function (item) {
+        return item.utility === utility && item.period === prevPeriod;
+      }) || null;
+      var latestPrior = allReadings.filter(function (item) {
+        return item.utility === utility && item.period < targetPeriod;
+      }).sort(function (a, b) { return a.period < b.period ? 1 : -1; })[0] || null;
+      var current = allReadings.find(function (item) {
+        return item.utility === utility && item.period === targetPeriod;
+      }) || null;
+      var ref = exactPrev || latestPrior;
+      var defaultRate = location
+        ? (utility === 'electricity' ? location.electricityRate : location.waterRate)
+        : (utility === 'electricity' ? settings.defaultElectricityRate : settings.defaultWaterRate);
+      return {
+        lastMonth: exactPrev,
+        latestPrior: latestPrior,
+        current: current,
+        previousValue: ref ? num(ref.current) : (current ? num(current.previous) : 0),
+        lastPeriod: ref ? ref.period : prevPeriod,
+        rate: current ? num(current.rate, defaultRate) : defaultRate
+      };
+    }
+
+    return {
+      roomId: roomId,
+      period: targetPeriod,
+      previousPeriod: prevPeriod,
+      electricityRate: location ? location.electricityRate : settings.defaultElectricityRate,
+      waterRate: location ? location.waterRate : settings.defaultWaterRate,
+      electricity: findUtility('electricity'),
+      water: findUtility('water')
+    };
+  }
+
   function getInvoiceDetails(id) {
     var invoice = getInvoice(id);
     if (!invoice) return null;
@@ -368,13 +450,23 @@
       return Object.assign({}, payment, { methodKey: 'method.' + payment.method });
     }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
     var tenancy = load().tenancies.find(function (item) { return item.id === invoice.tenancyId; });
+    var utilitySummary = getPreviousUtilitySummary(invoice.roomId, invoice.billingPeriod);
     return {
       invoice: invoice,
       items: buildInvoiceItems(invoice),
       payments: payments,
       tenancy: tenancy || null,
       balance: invoice.balance,
-      paid: invoice.paid
+      paid: invoice.paid,
+      previousMonth: {
+        period: utilitySummary.previousPeriod,
+        electricity: utilitySummary.electricity.lastMonth || utilitySummary.electricity.latestPrior,
+        water: utilitySummary.water.lastMonth || utilitySummary.water.latestPrior
+      },
+      readings: {
+        electricity: utilitySummary.electricity.current,
+        water: utilitySummary.water.current
+      }
     };
   }
 
@@ -869,6 +961,7 @@
     var nameKm = trim(source.nameKm) || trim(source.nameEn);
     if (!nameKm) return fail('nameRequired');
     var settings = getSettings();
+    var ts = nowIso();
     var record = {
       id: nextNumberId('loc-', load().locations),
       nameKm: nameKm,
@@ -883,9 +976,11 @@
       electricityRate: Math.max(num(source.electricityRate, settings.defaultElectricityRate), 0),
       waterRate: Math.max(num(source.waterRate, settings.defaultWaterRate), 0),
       defaultRent: Math.max(num(source.defaultRent, settings.defaultMonthlyRent), 0),
-      currency: 'USD'
+      currency: 'USD',
+      updatedAt: ts
     };
     load().locations.push(record);
+    touchScope('locations', ts);
     persist();
     notifyChange('location:create', { id: record.id });
     return ok(record);
@@ -904,6 +999,9 @@
     ['electricityRate', 'waterRate', 'defaultRent'].forEach(function (field) {
       if (source[field] !== undefined) location[field] = Math.max(num(source[field], location[field]), 0);
     });
+    var ts = nowIso();
+    location.updatedAt = ts;
+    touchScope('locations', ts);
     persist();
     notifyChange('location:update', { id: id });
     return ok(location);
@@ -918,15 +1016,17 @@
       load().invoices.some(function (invoice) { return invoice.locationId === id; });
     if (history) return fail('locationHasHistory');
     load().locations = load().locations.filter(function (item) { return item.id !== id; });
+    touchScope('locations');
     persist();
     notifyChange('location:delete', { id: id });
     return ok(true);
   }
 
-  function createMetersForRoom(room) {
+  function createMetersForRoom(room, ts) {
     var meters = load().meters;
     var suffix = String(room.locationId).replace(/^loc-/, '');
     var order = meters.length + 1;
+    var stamp = ts || nowIso();
     [
       { utility: 'electricity', prefix: 'E' },
       { utility: 'water', prefix: 'W' }
@@ -938,7 +1038,8 @@
         utility: item.utility,
         meterNumber: item.prefix + '-' + suffix + room.number + '-' + pad2(order),
         allocationMethod: 'individual',
-        status: 'active'
+        status: 'active',
+        updatedAt: stamp
       });
       order += 1;
     });
@@ -969,6 +1070,7 @@
       id = baseId + '-' + counter;
       counter += 1;
     }
+    var ts = nowIso();
     var room = {
       id: id,
       locationId: location.id,
@@ -977,10 +1079,12 @@
       type: type,
       monthlyRent: rent,
       status: status,
-      notes: trim(source.notes)
+      notes: trim(source.notes),
+      updatedAt: ts
     };
     load().rooms.push(room);
-    createMetersForRoom(room);
+    createMetersForRoom(room, ts);
+    touchScope(['rooms', 'meters'], ts);
     persist();
     notifyChange('room:create', { id: room.id });
     return ok(room);
@@ -1028,6 +1132,9 @@
     }
     if (roomHasTenancy(id)) room.status = 'occupied';
     if (source.notes !== undefined) room.notes = trim(source.notes);
+    var ts = nowIso();
+    room.updatedAt = ts;
+    touchScope('rooms', ts);
     persist();
     notifyChange('room:update', { id: id });
     return ok(room);
@@ -1042,6 +1149,7 @@
     if (history) return fail('roomHasHistory');
     load().rooms = load().rooms.filter(function (item) { return item.id !== id; });
     load().meters = load().meters.filter(function (meter) { return meter.roomId !== id; });
+    touchScope(['rooms', 'meters']);
     persist();
     notifyChange('room:delete', { id: id });
     return ok(true);
@@ -1053,6 +1161,7 @@
     if (!nameKm) return fail('nameRequired');
     var phone = trim(source.phone);
     if (String(phone).replace(/\D/g, '').length < 8) return fail('phoneRequired');
+    var ts = nowIso();
     var tenant = {
       id: nextNumberId('tenant-', load().tenants),
       nameKm: nameKm,
@@ -1065,9 +1174,11 @@
       emergencyContactName: trim(source.emergencyContactName),
       emergencyContactPhone: trim(source.emergencyContactPhone),
       notes: trim(source.notes),
-      status: 'active'
+      status: 'active',
+      updatedAt: ts
     };
     load().tenants.push(tenant);
+    touchScope('tenants', ts);
     persist();
     notifyChange('tenant:create', { id: tenant.id });
     return ok(tenant);
@@ -1084,6 +1195,9 @@
     });
     if (!tenant.nameEn) tenant.nameEn = tenant.nameKm;
     if (source.status !== undefined) tenant.status = source.status === 'inactive' ? 'inactive' : 'active';
+    var ts = nowIso();
+    tenant.updatedAt = ts;
+    touchScope('tenants', ts);
     persist();
     notifyChange('tenant:update', { id: id });
     return ok(tenant);
@@ -1096,6 +1210,7 @@
       load().invoices.some(function (invoice) { return invoice.tenantId === id; });
     if (history) return fail('tenantHasHistory');
     load().tenants = load().tenants.filter(function (item) { return item.id !== id; });
+    touchScope('tenants');
     persist();
     notifyChange('tenant:delete', { id: id });
     return ok(true);
@@ -1128,6 +1243,7 @@
     var rent = num(source.monthlyRent, room.monthlyRent);
     if (rent < 0) return fail('rentInvalid');
     var deposit = num(source.depositAmount, rent);
+    var ts = nowIso();
     var tenancy = {
       id: nextNumberId('tenancy-', load().tenancies),
       tenantId: tenant.id,
@@ -1140,11 +1256,15 @@
       depositAmount: deposit,
       depositPaid: num(source.depositPaid, deposit),
       status: 'active',
-      notes: trim(source.notes)
+      notes: trim(source.notes),
+      updatedAt: ts
     };
     load().tenancies.push(tenancy);
     room.status = 'occupied';
+    room.updatedAt = ts;
     tenant.status = 'active';
+    tenant.updatedAt = ts;
+    touchScope(['tenancies', 'rooms', 'tenants'], ts);
     persist();
     notifyChange('tenancy:assign', { id: tenancy.id, roomId: room.id, tenantId: tenant.id });
     return ok(tenancy);
@@ -1170,6 +1290,9 @@
     if (source.status === 'active' || source.status === 'ended' || source.status === 'cancelled') {
       tenancy.status = source.status;
     }
+    var ts = nowIso();
+    tenancy.updatedAt = ts;
+    touchScope(['tenancies', 'rooms'], ts);
     persist();
     notifyChange('tenancy:update', { id: id, roomId: tenancy.roomId });
     return ok(tenancy);
@@ -1183,17 +1306,21 @@
     var endDate = source.endDate || todayIso();
     if (!isDate(endDate)) return fail('dateRequired');
     if (endDate < tenancy.startDate) return fail('dateOrder');
+    var ts = nowIso();
     tenancy.endDate = endDate;
     tenancy.moveOutDate = source.moveOutDate || endDate;
     tenancy.status = 'ended';
     if (source.notes !== undefined) tenancy.notes = trim(source.notes);
+    tenancy.updatedAt = ts;
     var room = getRoom(tenancy.roomId);
     if (room) {
       var other = load().tenancies.some(function (item) {
         return item.id !== id && item.roomId === room.id && item.status === 'active';
       });
       room.status = other ? 'occupied' : 'vacant';
+      room.updatedAt = ts;
     }
+    touchScope(['tenancies', 'rooms'], ts);
     persist();
     notifyChange('tenancy:end', { id: id, roomId: tenancy.roomId });
     return ok(tenancy);
@@ -1205,19 +1332,22 @@
     var hasInvoices = load().invoices.some(function (invoice) { return invoice.tenancyId === id; });
     if (hasInvoices) return fail('tenancyHasInvoices');
     load().tenancies = load().tenancies.filter(function (item) { return item.id !== id; });
+    var ts = nowIso();
     var room = getRoom(tenancy.roomId);
     if (room) {
       var other = load().tenancies.some(function (item) {
         return item.roomId === room.id && item.status === 'active';
       });
       room.status = other ? 'occupied' : 'vacant';
+      room.updatedAt = ts;
     }
+    touchScope(['tenancies', 'rooms'], ts);
     persist();
     notifyChange('tenancy:delete', { id: id, roomId: tenancy.roomId });
     return ok(true);
   }
 
-  function saveReading(input) {
+  function prepareReadingUpsert(input) {
     var source = input || {};
     var room = getRoom(source.roomId);
     if (!room) return fail('roomRequired');
@@ -1227,8 +1357,12 @@
     var location = getLocation(room.locationId);
     var existing = load().readings.find(function (reading) {
       return reading.roomId === room.id && reading.utility === utility && reading.period === period;
-    });
-    var current = Number(source.current);
+    }) || null;
+    var rawCurrent = source.current;
+    if (rawCurrent === undefined || rawCurrent === null || String(rawCurrent).trim() === '') {
+      return fail('readingCurrentRequired');
+    }
+    var current = Number(rawCurrent);
     if (!isFinite(current)) return fail('readingCurrentRequired');
     var prior = load().readings.filter(function (reading) {
       return reading.roomId === room.id && reading.utility === utility && reading.period < period;
@@ -1236,42 +1370,81 @@
     var previous = prior ? num(prior.current) : (existing ? num(existing.previous) : 0);
     var consumption = round2(current - previous);
     if (consumption < 0) return fail('readingNegative');
-    var rate = num(source.rate, utility === 'electricity' ? location.electricityRate : location.waterRate);
+    var defaultRate = location
+      ? (utility === 'electricity' ? location.electricityRate : location.waterRate)
+      : (utility === 'electricity' ? getSettings().defaultElectricityRate : getSettings().defaultWaterRate);
+    var rate = source.rate !== undefined && source.rate !== null && String(source.rate).trim() !== ''
+      ? Math.max(num(source.rate, defaultRate), 0)
+      : (existing ? num(existing.rate, defaultRate) : defaultRate);
     var tenancy = tenancyForRoom(room.id, period);
     var meter = load().meters.find(function (item) {
       return item.roomId === room.id && item.utility === utility;
     });
-    var reading = existing || {
-      id: nextNumberId('reading-', load().readings, 4),
-      meterId: meter ? meter.id : null,
-      locationId: room.locationId,
-      roomId: room.id,
+    return {
+      ok: true,
+      room: room,
       utility: utility,
-      period: period
+      period: period,
+      existing: existing,
+      meter: meter,
+      tenancy: tenancy,
+      readingDate: (source.readingDate && isDate(source.readingDate)) ? source.readingDate : (existing ? existing.readingDate : todayIso()),
+      previous: previous,
+      current: current,
+      consumption: consumption,
+      rate: rate,
+      amount: round2(consumption * rate)
     };
-    reading.tenancyId = tenancy ? tenancy.id : null;
-    reading.readingDate = source.readingDate || todayIso();
-    reading.previous = previous;
-    reading.current = current;
-    reading.consumption = consumption;
-    reading.rate = rate;
-    reading.amount = round2(consumption * rate);
-    if (!existing) load().readings.push(reading);
+  }
 
-    var invoice = invoiceForRoomPeriod(room.id, period);
-    if (invoice) {
-      invoice[utility] = {
-        previous: reading.previous,
-        current: reading.current,
-        consumption: reading.consumption,
-        rate: reading.rate,
-        amount: reading.amount
-      };
-      recalcInvoice(invoice);
+  function commitPreparedReading(prep, ts, skipInvoiceSync) {
+    var stamp = ts || nowIso();
+    var reading = prep.existing || {
+      id: nextNumberId('reading-', load().readings, 4),
+      meterId: prep.meter ? prep.meter.id : null,
+      locationId: prep.room.locationId,
+      roomId: prep.room.id,
+      utility: prep.utility,
+      period: prep.period
+    };
+    reading.tenancyId = prep.tenancy ? prep.tenancy.id : null;
+    reading.readingDate = prep.readingDate;
+    reading.previous = prep.previous;
+    reading.current = prep.current;
+    reading.consumption = prep.consumption;
+    reading.rate = prep.rate;
+    reading.amount = prep.amount;
+    reading.updatedAt = stamp;
+    if (!prep.existing) load().readings.push(reading);
+
+    var invoiceSynced = false;
+    if (!skipInvoiceSync) {
+      var invoice = invoiceForRoomPeriod(prep.room.id, prep.period);
+      if (invoice) {
+        invoice[prep.utility] = {
+          previous: reading.previous,
+          current: reading.current,
+          consumption: reading.consumption,
+          rate: reading.rate,
+          amount: reading.amount
+        };
+        invoice.updatedAt = stamp;
+        recalcInvoice(invoice);
+        invoiceSynced = true;
+      }
     }
+    return { reading: reading, invoiceSynced: invoiceSynced };
+  }
+
+  function saveReading(input) {
+    var prep = prepareReadingUpsert(input);
+    if (!prep.ok) return prep;
+    var ts = nowIso();
+    var committed = commitPreparedReading(prep, ts, false);
+    touchScope(committed.invoiceSynced ? ['meters', 'invoices'] : 'meters', ts);
     persist();
-    notifyChange('reading:save', { id: reading.id, roomId: room.id, period: period });
-    return ok(reading);
+    notifyChange('reading:save', { id: committed.reading.id, roomId: prep.room.id, period: prep.period });
+    return ok(committed.reading);
   }
 
   function deleteReading(id) {
@@ -1279,9 +1452,128 @@
     if (!reading) return fail('notFound');
     if (invoiceForRoomPeriod(reading.roomId, reading.period)) return fail('readingHasInvoice');
     load().readings = load().readings.filter(function (item) { return item.id !== id; });
+    touchScope('meters');
     persist();
     notifyChange('reading:delete', { id: id, roomId: reading.roomId, period: reading.period });
     return ok(true);
+  }
+
+  function readingToInvoiceUtility(reading) {
+    return reading ? {
+      previous: reading.previous,
+      current: reading.current,
+      consumption: reading.consumption,
+      rate: reading.rate,
+      amount: reading.amount
+    } : { previous: 0, current: 0, consumption: 0, rate: 0, amount: 0 };
+  }
+
+  function createInvoice(input) {
+    var source = input || {};
+    var period = source.period || getMeta().currentPeriod;
+    if (!/^\d{4}-\d{2}$/.test(String(period))) return fail('invalidPeriod');
+
+    var tenancy = source.tenancyId
+      ? load().tenancies.find(function (item) { return item.id === source.tenancyId; })
+      : null;
+    var room = source.roomId
+      ? getRoom(source.roomId)
+      : (tenancy ? getRoom(tenancy.roomId) : null);
+    if (!room) return fail('roomRequired');
+    if (!tenancy) tenancy = tenancyForRoom(room.id, period);
+    if (!tenancy) return fail('tenantRequired');
+
+    var exists = load().invoices.some(function (invoice) {
+      return invoice.status !== 'cancelled' && invoice.billingPeriod === period &&
+        (invoice.tenancyId === tenancy.id || invoice.roomId === room.id);
+    });
+    if (exists) return fail('invoiceExists');
+
+    var issueDate = source.issueDate || (period + '-03');
+    if (period === getMeta().currentPeriod && !source.issueDate && todayIso() < issueDate) issueDate = todayIso();
+    if (!isDate(issueDate)) return fail('dateRequired');
+    var dueDate = source.dueDate || (F.addMonths(period, 1) + '-05');
+    if (!isDate(dueDate)) return fail('dateRequired');
+
+    var rent = source.rent !== undefined && source.rent !== null && String(source.rent).trim() !== ''
+      ? num(source.rent, -1)
+      : num(tenancy.monthlyRent, room.monthlyRent);
+    if (!isFinite(rent) || rent < 0) return fail('rentInvalid');
+
+    var hasElec = source.electricityCurrent !== undefined && source.electricityCurrent !== null &&
+      String(source.electricityCurrent).trim() !== '';
+    var hasWater = source.waterCurrent !== undefined && source.waterCurrent !== null &&
+      String(source.waterCurrent).trim() !== '';
+
+    var ePrep = null;
+    var wPrep = null;
+    if (hasElec) {
+      ePrep = prepareReadingUpsert({
+        roomId: room.id,
+        utility: 'electricity',
+        period: period,
+        current: source.electricityCurrent,
+        rate: source.electricityRate,
+        readingDate: source.readingDate
+      });
+      if (!ePrep.ok) return ePrep;
+    }
+    if (hasWater) {
+      wPrep = prepareReadingUpsert({
+        roomId: room.id,
+        utility: 'water',
+        period: period,
+        current: source.waterCurrent,
+        rate: source.waterRate,
+        readingDate: source.readingDate
+      });
+      if (!wPrep.ok) return wPrep;
+    }
+
+    var ts = nowIso();
+    if (ePrep) commitPreparedReading(ePrep, ts, true);
+    if (wPrep) commitPreparedReading(wPrep, ts, true);
+
+    var electricity = load().readings.find(function (reading) {
+      return reading.roomId === room.id && reading.utility === 'electricity' && reading.period === period;
+    });
+    var water = load().readings.find(function (reading) {
+      return reading.roomId === room.id && reading.utility === 'water' && reading.period === period;
+    });
+
+    var invoice = {
+      id: nextNumberId('invoice-', load().invoices),
+      invoiceNumber: nextYearNumber('INV-' + F.parsePeriod(period).year + '-', load().invoices, 'invoiceNumber'),
+      billingPeriod: period,
+      locationId: room.locationId,
+      roomId: room.id,
+      tenancyId: tenancy.id,
+      tenantId: tenancy.tenantId,
+      issueDate: issueDate,
+      dueDate: dueDate,
+      rent: round2(rent),
+      electricity: readingToInvoiceUtility(electricity),
+      water: readingToInvoiceUtility(water),
+      otherCharges: Math.max(num(source.otherCharges, 0), 0),
+      discount: Math.max(num(source.discount, 0), 0),
+      lateFee: Math.max(num(source.lateFee, 0), 0),
+      previousBalance: Math.max(num(source.previousBalance, 0), 0),
+      total: 0,
+      paid: 0,
+      balance: 0,
+      status: 'finalized',
+      currency: 'USD',
+      notes: trim(source.notes),
+      updatedAt: ts
+    };
+    invoice.total = invoiceTotal(invoice);
+    invoice.balance = invoice.total;
+    load().invoices.push(invoice);
+    recalcAllInvoices();
+    touchScope(ePrep || wPrep ? ['invoices', 'meters'] : 'invoices', ts);
+    persist();
+    notifyChange('invoice:create', { id: invoice.id, roomId: room.id, period: period });
+    return ok(invoice);
   }
 
   function generateInvoices(input) {
@@ -1289,12 +1581,61 @@
     var period = source.period || getMeta().currentPeriod;
     if (!/^\d{4}-\d{2}$/.test(String(period))) return fail('invalidPeriod');
     var locationId = source.locationId || 'all';
+    var issueDate = source.issueDate || (period + '-03');
+    if (period === getMeta().currentPeriod && !source.issueDate && todayIso() < issueDate) issueDate = todayIso();
+    if (!isDate(issueDate)) return fail('dateRequired');
+    var dueDate = source.dueDate || (F.addMonths(period, 1) + '-05');
+    if (!isDate(dueDate)) return fail('dateRequired');
+
+    var readingEntries = [];
+    if (Array.isArray(source.readings)) {
+      readingEntries = source.readings;
+    } else if (source.readings && typeof source.readings === 'object') {
+      readingEntries = Object.keys(source.readings).map(function (roomId) {
+        return Object.assign({ roomId: roomId }, source.readings[roomId]);
+      });
+    }
+
+    var preparedReadings = [];
+    for (var i = 0; i < readingEntries.length; i += 1) {
+      var entry = readingEntries[i] || {};
+      if (!entry.roomId) continue;
+      if (entry.electricityCurrent !== undefined && entry.electricityCurrent !== null &&
+          String(entry.electricityCurrent).trim() !== '') {
+        var ePrep = prepareReadingUpsert({
+          roomId: entry.roomId,
+          utility: 'electricity',
+          period: period,
+          current: entry.electricityCurrent,
+          rate: entry.electricityRate,
+          readingDate: entry.readingDate || source.readingDate
+        });
+        if (!ePrep.ok) return ePrep;
+        preparedReadings.push(ePrep);
+      }
+      if (entry.waterCurrent !== undefined && entry.waterCurrent !== null &&
+          String(entry.waterCurrent).trim() !== '') {
+        var wPrep = prepareReadingUpsert({
+          roomId: entry.roomId,
+          utility: 'water',
+          period: period,
+          current: entry.waterCurrent,
+          rate: entry.waterRate,
+          readingDate: entry.readingDate || source.readingDate
+        });
+        if (!wPrep.ok) return wPrep;
+        preparedReadings.push(wPrep);
+      }
+    }
+
+    var ts = nowIso();
+    preparedReadings.forEach(function (prep) {
+      commitPreparedReading(prep, ts, true);
+    });
+
     var created = 0;
     var skipped = 0;
     var missing = [];
-    var issueDate = source.issueDate || (period + '-03');
-    if (period === getMeta().currentPeriod && todayIso() < issueDate) issueDate = todayIso();
-    var dueDate = source.dueDate || (F.addMonths(period, 1) + '-05');
 
     load().tenancies.filter(function (tenancy) {
       return tenancy.status === 'active' && tenancyCoversPeriod(tenancy, period) &&
@@ -1326,20 +1667,8 @@
         issueDate: issueDate,
         dueDate: dueDate,
         rent: rent,
-        electricity: electricity ? {
-          previous: electricity.previous,
-          current: electricity.current,
-          consumption: electricity.consumption,
-          rate: electricity.rate,
-          amount: electricity.amount
-        } : { previous: 0, current: 0, consumption: 0, rate: 0, amount: 0 },
-        water: water ? {
-          previous: water.previous,
-          current: water.current,
-          consumption: water.consumption,
-          rate: water.rate,
-          amount: water.amount
-        } : { previous: 0, current: 0, consumption: 0, rate: 0, amount: 0 },
+        electricity: readingToInvoiceUtility(electricity),
+        water: readingToInvoiceUtility(water),
         otherCharges: Math.max(num(source.otherCharges, 0), 0),
         discount: Math.max(num(source.discount, 0), 0),
         lateFee: 0,
@@ -1349,7 +1678,8 @@
         balance: 0,
         status: 'finalized',
         currency: 'USD',
-        notes: trim(source.notes)
+        notes: trim(source.notes),
+        updatedAt: ts
       };
       invoice.total = invoiceTotal(invoice);
       invoice.balance = invoice.total;
@@ -1357,8 +1687,9 @@
       created += 1;
     });
 
-    if (created) {
+    if (created || preparedReadings.length) {
       recalcAllInvoices();
+      touchScope(preparedReadings.length ? ['invoices', 'meters'] : 'invoices', ts);
       persist();
       notifyChange('invoice:generate', { period: period, created: created });
     }
@@ -1370,16 +1701,66 @@
     if (!invoice) return fail('notFound');
     if (invoice.status === 'cancelled') return fail('invoiceCancelled');
     var source = patch || {};
+
+    if (source.rent !== undefined && source.rent !== null && String(source.rent).trim() !== '') {
+      var rentVal = num(source.rent, -1);
+      if (!isFinite(rentVal) || rentVal < 0) return fail('rentInvalid');
+    }
+    if (source.dueDate !== undefined && !isDate(source.dueDate)) return fail('dateRequired');
+    if (source.issueDate !== undefined && !isDate(source.issueDate)) return fail('dateRequired');
+
+    var hasElec = source.electricityCurrent !== undefined && source.electricityCurrent !== null &&
+      String(source.electricityCurrent).trim() !== '';
+    var hasWater = source.waterCurrent !== undefined && source.waterCurrent !== null &&
+      String(source.waterCurrent).trim() !== '';
+
+    var ePrep = null;
+    var wPrep = null;
+    if (hasElec) {
+      ePrep = prepareReadingUpsert({
+        roomId: invoice.roomId,
+        utility: 'electricity',
+        period: invoice.billingPeriod,
+        current: source.electricityCurrent,
+        rate: source.electricityRate !== undefined ? source.electricityRate : (invoice.electricity ? invoice.electricity.rate : undefined),
+        readingDate: source.readingDate
+      });
+      if (!ePrep.ok) return ePrep;
+    }
+    if (hasWater) {
+      wPrep = prepareReadingUpsert({
+        roomId: invoice.roomId,
+        utility: 'water',
+        period: invoice.billingPeriod,
+        current: source.waterCurrent,
+        rate: source.waterRate !== undefined ? source.waterRate : (invoice.water ? invoice.water.rate : undefined),
+        readingDate: source.readingDate
+      });
+      if (!wPrep.ok) return wPrep;
+    }
+
+    var ts = nowIso();
+    if (ePrep) {
+      var eCommitted = commitPreparedReading(ePrep, ts, true);
+      invoice.electricity = readingToInvoiceUtility(eCommitted.reading);
+    }
+    if (wPrep) {
+      var wCommitted = commitPreparedReading(wPrep, ts, true);
+      invoice.water = readingToInvoiceUtility(wCommitted.reading);
+    }
+
+    if (source.rent !== undefined && source.rent !== null && String(source.rent).trim() !== '') {
+      invoice.rent = round2(num(source.rent, invoice.rent));
+    }
     ['otherCharges', 'discount', 'lateFee', 'previousBalance'].forEach(function (field) {
       if (source[field] !== undefined) invoice[field] = Math.max(num(source[field], invoice[field]), 0);
     });
-    if (source.dueDate !== undefined) {
-      if (!isDate(source.dueDate)) return fail('dateRequired');
-      invoice.dueDate = source.dueDate;
-    }
-    if (source.issueDate !== undefined && isDate(source.issueDate)) invoice.issueDate = source.issueDate;
+    if (source.dueDate !== undefined) invoice.dueDate = source.dueDate;
+    if (source.issueDate !== undefined) invoice.issueDate = source.issueDate;
     if (source.notes !== undefined) invoice.notes = trim(source.notes);
+    invoice.updatedAt = ts;
     recalcInvoice(invoice);
+    touchScope(ePrep || wPrep ? ['invoices', 'meters'] : 'invoices', ts);
     persist();
     notifyChange('invoice:update', { id: id });
     return ok(invoice);
@@ -1390,8 +1771,11 @@
     if (!invoice) return fail('notFound');
     if (invoice.status === 'cancelled') return fail('invoiceCancelled');
     if (num(invoice.paid) > 0.005) return fail('invoicePaid');
+    var ts = nowIso();
     invoice.status = 'cancelled';
     invoice.balance = 0;
+    invoice.updatedAt = ts;
+    touchScope('invoices', ts);
     persist();
     notifyChange('invoice:cancel', { id: id });
     return ok(invoice);
@@ -1402,6 +1786,7 @@
     if (!invoice) return fail('notFound');
     if (paymentsForInvoice(id).length) return fail('invoiceHasPayments');
     load().invoices = load().invoices.filter(function (item) { return item.id !== id; });
+    touchScope('invoices');
     persist();
     notifyChange('invoice:delete', { id: id });
     return ok(true);
@@ -1418,6 +1803,7 @@
     var date = source.date || todayIso();
     if (!isDate(date)) return fail('dateRequired');
     var method = ['cash', 'aba', 'acleda', 'bank_transfer', 'other'].indexOf(source.method) !== -1 ? source.method : 'cash';
+    var ts = nowIso();
     var payment = {
       id: nextNumberId('payment-', load().payments),
       paymentNumber: nextYearNumber('PAY-' + F.parsePeriod(date).year + '-', load().payments, 'paymentNumber', 4),
@@ -1431,11 +1817,14 @@
       method: method,
       reference: trim(source.reference),
       notes: trim(source.notes),
-      status: 'completed'
+      status: 'completed',
+      updatedAt: ts
     };
     load().payments.push(payment);
     rebuildIndexes();
     recalcInvoice(invoice);
+    invoice.updatedAt = ts;
+    touchScope(['payments', 'invoices'], ts);
     persist();
     notifyChange('payment:create', { id: payment.id, invoiceId: invoice.id });
     return ok(payment);
@@ -1446,8 +1835,13 @@
     if (!payment) return fail('notFound');
     load().payments = load().payments.filter(function (item) { return item.id !== id; });
     rebuildIndexes();
+    var ts = nowIso();
     var invoice = load().invoices.find(function (item) { return item.id === payment.invoiceId; });
-    if (invoice) recalcInvoice(invoice);
+    if (invoice) {
+      recalcInvoice(invoice);
+      invoice.updatedAt = ts;
+    }
+    touchScope(['payments', 'invoices'], ts);
     persist();
     notifyChange('payment:delete', { id: id, invoiceId: payment.invoiceId });
     return ok(true);
@@ -1463,6 +1857,9 @@
       if (source[field] !== undefined) settings[field] = Math.max(num(source[field], settings[field]), 0);
     });
     if (source.defaultLanguage === 'km' || source.defaultLanguage === 'en') settings.defaultLanguage = source.defaultLanguage;
+    var ts = nowIso();
+    settings.updatedAt = ts;
+    touchScope('settings', ts);
     persist();
     notifyChange('settings:update', {});
     return ok(settings);
@@ -1482,7 +1879,8 @@
       app: 'RRMS',
       version: Config.version,
       seedDate: current.meta.seedDate,
-      exportedAt: new Date().toISOString(),
+      exportedAt: nowIso(),
+      lastModified: current.meta.lastModified || {},
       data: {
         locations: current.locations,
         rooms: current.rooms,
@@ -1515,6 +1913,12 @@
     });
     if (bundle.settings && typeof bundle.settings === 'object') {
       Object.assign(target.settings, bundle.settings);
+    }
+    var ts = nowIso();
+    if (payload && payload.lastModified && typeof payload.lastModified === 'object') {
+      target.meta.lastModified = Object.assign({}, target.meta.lastModified || {}, payload.lastModified, { overall: ts });
+    } else {
+      touchScope(['locations', 'rooms', 'tenants', 'tenancies', 'meters', 'readings', 'invoices', 'payments', 'settings'], ts);
     }
     recalcAllInvoices();
     persist();
@@ -1811,6 +2215,7 @@
   RRMS.Store = {
     /* read model ------------------------------------------------------- */
     getMeta: getMeta,
+    getLastUpdated: getLastUpdated,
     getLocations: getLocations,
     getLocation: getLocation,
     getRooms: getRooms,
@@ -1823,6 +2228,7 @@
     getInvoiceByNumber: getInvoiceByNumber,
     getInvoiceDetails: getInvoiceDetails,
     getInvoiceView: invoiceView,
+    getPreviousUtilitySummary: getPreviousUtilitySummary,
     getPayments: getPayments,
     getPaymentsForInvoice: paymentsForInvoice,
     getMeters: getMeters,
@@ -1875,6 +2281,7 @@
     deleteReading: deleteReading,
 
     /* invoices --------------------------------------------------------- */
+    createInvoice: createInvoice,
     generateInvoices: generateInvoices,
     updateInvoice: updateInvoice,
     cancelInvoice: cancelInvoice,

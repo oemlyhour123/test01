@@ -41,6 +41,17 @@
     return '$' + number(amount, 2);
   }
 
+  function moneyKhr(usdValue, exchangeRate) {
+    var rate = Number(exchangeRate);
+    if (!(rate > 0)) {
+      var settings = RRMS.Store && typeof RRMS.Store.getSettings === 'function'
+        ? RRMS.Store.getSettings()
+        : null;
+      rate = (settings && Number(settings.exchangeRateKhr)) || Number(Config.usdToKhr) || 4100;
+    }
+    return money(Math.round((Number(usdValue) || 0) * rate), { currency: 'KHR' });
+  }
+
   function compactMoney(value) {
     var amount = Number(value) || 0;
     if (Math.abs(amount) >= 1000) {
@@ -95,9 +106,31 @@
 
   function shortDate(value) {
     if (!value) return '—';
-    var d = value instanceof Date ? value : new Date(value + 'T00:00:00');
+    var d = value instanceof Date ? value : new Date(value + (String(value).length === 10 ? 'T00:00:00' : ''));
     if (isNaN(d.getTime())) return '—';
     return number(d.getDate(), 0) + ' ' + monthName(d.getMonth());
+  }
+
+  function formatTime(d) {
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  function dateTime(value) {
+    if (!value) return '—';
+    var str = String(value);
+    if (!(value instanceof Date) && str.length === 10) return date(value);
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return '—';
+    return date(d) + ' • ' + formatTime(d);
+  }
+
+  function shortDateTime(value) {
+    if (!value) return '—';
+    var str = String(value);
+    if (!(value instanceof Date) && str.length === 10) return shortDate(value);
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return '—';
+    return shortDate(d) + ' • ' + formatTime(d);
   }
 
   function weekday(value) {
@@ -155,6 +188,7 @@
   RRMS.Format = {
     number: number,
     money: money,
+    moneyKhr: moneyKhr,
     compactMoney: compactMoney,
     percent: percent,
     monthName: monthName,
@@ -162,6 +196,8 @@
     monthShort: monthShort,
     date: date,
     shortDate: shortDate,
+    dateTime: dateTime,
+    shortDateTime: shortDateTime,
     weekday: weekday,
     isoDate: isoDate,
     monthKey: monthKey,

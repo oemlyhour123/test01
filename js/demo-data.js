@@ -80,6 +80,22 @@
     return period + '-' + pad(new Date(p.year, p.month, 0).getDate());
   }
 
+  function isoStamp(dateStr, hour, minute) {
+    var parts = String(dateStr || '').split('-');
+    var y = parseInt(parts[0], 10) || 2026;
+    var m = (parseInt(parts[1], 10) || 1) - 1;
+    var d = parseInt(parts[2], 10) || 1;
+    return new Date(y, m, d, hour || 9, minute || 0, 0).toISOString();
+  }
+
+  function maxStamp(items, fallback) {
+    var best = fallback || null;
+    items.forEach(function (item) {
+      if (item && item.updatedAt && (!best || item.updatedAt > best)) best = item.updatedAt;
+    });
+    return best;
+  }
+
   function build() {
     var today = startOfDay(new Date());
     var todayIso = iso(today);
@@ -93,6 +109,7 @@
 
     var periods = [];
     for (var m = 11; m >= 0; m -= 1) periods.push(addMonthsToPeriod(currentPeriod, -m));
+    var seedStamp = isoStamp(addDays(todayIso, -5), 9, 30);
 
     var locations = [
       {
@@ -109,7 +126,8 @@
         electricityRate: 0.25,
         waterRate: 0.50,
         defaultRent: 125,
-        currency: 'USD'
+        currency: 'USD',
+        updatedAt: isoStamp(addDays(todayIso, -4), 10, 15)
       },
       {
         id: 'loc-2',
@@ -125,7 +143,8 @@
         electricityRate: 0.25,
         waterRate: 0.50,
         defaultRent: 125,
-        currency: 'USD'
+        currency: 'USD',
+        updatedAt: isoStamp(addDays(todayIso, -3), 14, 20)
       }
     ];
 
@@ -166,7 +185,8 @@
         type: seed.type,
         monthlyRent: seed.rent,
         status: seed.state,
-        notes: seed.state === 'maintenance' ? 'កំពុងជួសជុលបន្ទប់ទឹក និងពិដាន។' : ''
+        notes: seed.state === 'maintenance' ? 'កំពុងជួសជុលបន្ទប់ទឹក និងពិដាន។' : '',
+        updatedAt: isoStamp(addDays(todayIso, -(index % 5)), 9 + (index % 8), (index * 7) % 60)
       };
     });
 
@@ -195,6 +215,7 @@
         endDate = addDays(todayIso, 280);
       }
 
+      var tenancyStamp = isoStamp(startDate > addDays(todayIso, -5) ? startDate : addDays(todayIso, -(index % 6)), 10 + (index % 7), (index * 11) % 60);
       var tenancy = {
         id: 'tenancy-' + pad(index + 1),
         tenantId: tenantId,
@@ -207,7 +228,8 @@
         depositAmount: room.monthlyRent,
         depositPaid: room.monthlyRent,
         status: 'active',
-        notes: ''
+        notes: '',
+        updatedAt: tenancyStamp
       };
 
       tenants.push({
@@ -221,7 +243,8 @@
         addressKm: locations[index % 2].addressKm,
         emergencyContactName: TENANT_NAMES[(index + 3) % TENANT_NAMES.length].km,
         emergencyContactPhone: '0' + pick(['10', '11', '12', '92']) + ' ' + randInt(100, 999) + ' ' + randInt(100, 999),
-        notes: ''
+        notes: '',
+        updatedAt: isoStamp(addDays(todayIso, -(index % 7)), 11 + (index % 6), (index * 13) % 60)
       });
 
       tenancies.push(tenancy);
@@ -296,6 +319,7 @@
         var waterPrevious = waterCumulative;
         var waterCurrent = waterPrevious + waterUsage;
 
+        var readingStamp = isoStamp(readingDate, 15, (readingId * 3) % 60);
         readings.push({
           id: 'reading-' + pad(readingId++, 4),
           meterId: 'meter-e-' + room.id,
@@ -309,7 +333,8 @@
           current: elecCurrent,
           consumption: elecUsage,
           rate: location.electricityRate,
-          amount: round2(elecUsage * location.electricityRate)
+          amount: round2(elecUsage * location.electricityRate),
+          updatedAt: readingStamp
         });
         readings.push({
           id: 'reading-' + pad(readingId++, 4),
@@ -324,7 +349,8 @@
           current: waterCurrent,
           consumption: waterUsage,
           rate: location.waterRate,
-          amount: round2(waterUsage * location.waterRate)
+          amount: round2(waterUsage * location.waterRate),
+          updatedAt: readingStamp
         });
 
         elecCumulative = elecCurrent;
@@ -358,6 +384,7 @@
     function addPayment(invoice, amount, date, method, reference) {
       if (amount <= 0) return;
       var p = F.parsePeriod(invoice.billingPeriod);
+      var stamp = isoStamp(date, 14, (paymentId * 5) % 60);
       var payment = {
         id: 'payment-' + pad(paymentId++, 3),
         paymentNumber: nextPaymentNumber(p.year),
@@ -371,10 +398,12 @@
         method: method,
         reference: reference || '',
         notes: '',
-        status: 'completed'
+        status: 'completed',
+        updatedAt: stamp
       };
       payments.push(payment);
       paidByInvoice[invoice.id] = round2((paidByInvoice[invoice.id] || 0) + amount);
+      if (!invoice.updatedAt || stamp > invoice.updatedAt) invoice.updatedAt = stamp;
     }
 
     var methods = ['cash', 'cash', 'cash', 'aba', 'aba', 'acleda', 'bank_transfer', 'other'];
@@ -442,7 +471,8 @@
           balance: 0,
           status: cancelled ? 'cancelled' : 'finalized',
           currency: 'USD',
-          notes: ''
+          notes: '',
+          updatedAt: isoStamp(issueDate, 16, (roomIndex * 4) % 60)
         };
 
         invoices.push(invoice);
@@ -508,7 +538,8 @@
       defaultMonthlyRent: 125,
       invoiceDueDay: 5,
       defaultLanguage: 'km',
-      dateFormat: 'DD MMMM YYYY'
+      dateFormat: 'DD MMMM YYYY',
+      updatedAt: seedStamp
     };
 
     var notifications = [];
@@ -523,6 +554,18 @@
       });
     });
 
+    var lastLocations = maxStamp(locations, seedStamp);
+    var lastRooms = maxStamp(rooms, seedStamp);
+    var lastTenants = maxStamp(tenants, seedStamp);
+    var lastTenancies = maxStamp(tenancies, seedStamp);
+    var lastMeters = maxStamp(readings, seedStamp);
+    var lastInvoices = maxStamp(invoices, seedStamp);
+    var lastPayments = maxStamp(payments, seedStamp);
+    var lastSettings = systemSettings.updatedAt;
+    var lastReports = [lastInvoices, lastPayments].sort().pop();
+    var lastDashboard = [lastLocations, lastRooms, lastTenancies, lastMeters, lastInvoices, lastPayments].sort().pop();
+    var lastOverall = [lastDashboard, lastTenants, lastSettings].sort().pop();
+
     return {
       meta: {
         isDemo: true,
@@ -531,7 +574,20 @@
         seedDate: todayIso,
         currentPeriod: currentPeriod,
         currency: 'USD',
-        months: periods.slice()
+        months: periods.slice(),
+        lastModified: {
+          overall: lastOverall,
+          dashboard: lastDashboard,
+          locations: lastLocations,
+          rooms: lastRooms,
+          tenants: lastTenants,
+          tenancies: lastTenancies,
+          meters: lastMeters,
+          invoices: lastInvoices,
+          payments: lastPayments,
+          reports: lastReports,
+          settings: lastSettings
+        }
       },
       locations: locations,
       rooms: rooms,

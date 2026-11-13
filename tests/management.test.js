@@ -356,9 +356,115 @@ const dictionary = RRMS.Translations;
 ['nav.locations', 'nav.rooms', 'nav.tenants', 'nav.meterReadings', 'nav.invoices',
   'nav.payments', 'nav.reports', 'nav.settings', 'locations.add', 'rooms.add', 'tenants.add',
   'tenancies.add', 'meters.save', 'invoices.generate', 'payments.add', 'reports.print',
-  'settings.reset', 'error.roomOccupied'].forEach((key) => {
+  'settings.reset', 'error.roomOccupied', 'common.lastChanged', 'common.updatedAt',
+  'invoices.create', 'invoices.lastMonthData', 'invoices.thisMonthInput',
+  'invoices.utilityComparison', 'invoices.printPdf', 'invoices.pdfPreviewTitle',
+  'error.invoiceExists'].forEach((key) => {
   check(!!dictionary[key] && !!dictionary[key].km && !!dictionary[key].en,
     'Translation key is bilingual: ' + key);
 });
 
+/* ----------------------- change timestamps, utility comparison & inline invoice ops */
+const prevPeriod = F.addMonths(current, -1);
+check(F.dateTime('2026-11-10T09:15:00').indexOf('09:15') !== -1, 'Format.dateTime includes HH:mm time');
+check(F.shortDateTime('2026-11-10T14:30:00').indexOf('14:30') !== -1, 'Format.shortDateTime includes HH:mm time');
+equal(F.dateTime(''), '—', 'Format.dateTime handles empty strings');
+check(F.moneyKhr(10, 4100).indexOf('41,000') !== -1 && F.moneyKhr(10, 4100).indexOf('៛') !== -1, 'Format.moneyKhr converts USD to KHR');
+
+Store.resetDemoData();
+['dashboard', 'locations', 'rooms', 'tenants', 'tenancies', 'meters',
+  'invoices', 'payments', 'reports', 'settings', 'overall'].forEach((scope) => {
+  check(!!Store.getLastUpdated(scope), 'Last updated timestamp exists for scope: ' + scope);
+});
+
+const existingInv = Store.getInvoiceList({ period: current })[0];
+check(!!existingInv.updatedAt, 'Seeded invoice includes updatedAt timestamp');
+const existingDetails = Store.getInvoiceDetails(existingInv.id);
+check(!!existingDetails.previousMonth && !!existingDetails.previousMonth.electricity &&
+  !!existingDetails.previousMonth.water, 'Invoice details expose last month electricity and water usage');
+
+const prevUtilSummary = Store.getPreviousUtilitySummary(existingInv.roomId, existingInv.billingPeriod);
+check(!!prevUtilSummary.electricity && !!prevUtilSummary.water, 'Previous utility summary returns electricity and water info');
+check(prevUtilSummary.electricity.previousValue >= 0, 'Previous utility summary provides previousValue reading');
+
+// Create invoice with inline readings and verify last-month comparison + atomic validation
+const newLoc = Store.createLocation({ nameKm: 'ផ្ទះសាកល្បង ២', nameEn: 'Test Villa 2', electricityRate: 0.25, waterRate: 0.5 }).record;
+const newRoom = Store.createRoom({ locationId: newLoc.id, number: 'T-01', monthlyRent: 150 }).record;
+const newTenant = Store.createTenant({ nameKm: 'អ្នកជួល សាកល្បង', nameEn: 'Tenant Test', phone: '012999888' }).record;
+const newTenancy = Store.assignTenant({ tenantId: newTenant.id, roomId: newRoom.id, startDate: prevPeriod + '-01', monthlyRent: 150 }).record;
+
+check(Store.saveReading({ roomId: newRoom.id, utility: 'electricity', period: prevPeriod, current: 200 }).ok, 'Seeded prior electricity reading');
+check(Store.saveReading({ roomId: newRoom.id, utility: 'water', period: prevPeriod, current: 40 }).ok, 'Seeded prior water reading');
+
+failWith(Store.createInvoice({
+  period: current,
+  tenancyId: newTenancy.id,
+  roomId: newRoom.id,
+  electricityCurrent: 150,
+  waterCurrent: 50
+}), 'readingNegative', 'Create invoice rejects current electricity reading lower than prior reading');
+equal(Store.getInvoiceList({ period: current, roomId: newRoom.id }).length, 0, 'Rejected createInvoice leaves no partial invoice');
+
+const createdInvRes = Store.createInvoice({
+  period: current,
+  tenancyId: newTenancy.id,
+  roomId: newRoom.id,
+  rent: 160,
+  electricityCurrent: 280,
+  waterCurrent: 52,
+  otherCharges: 5
+});
+check(createdInvRes.ok, 'Create invoice succeeds with inline electricity and water readings');
+const createdInv = createdInvRes.record;
+// 160 rent + (80 * 0.25 = 20 elec) + (12 * 0.5 = 6 water) + 5 other = 191
+near(createdInv.total, 191, 'Created invoice computes rent + electricity + water + charges');
+check(!!createdInv.updatedAt, 'Created invoice has updatedAt timestamp');
+
+failWith(Store.createInvoice({
+  period: current,
+  tenancyId: newTenancy.id,
+  roomId: newRoom.id
+}), 'invoiceExists', 'Duplicate invoice for same room and period is rejected');
+
+const createdDetails = Store.getInvoiceDetails(createdInv.id);
+equal(createdDetails.previousMonth.electricity.consumption, 200, 'Created invoice details show last month electricity usage');
+equal(createdDetails.previousMonth.water.consumption, 40, 'Created invoice details show last month water usage');
+
+// Atomic updateInvoice failure and success with inline readings
+failWith(Store.updateInvoice(createdInv.id, {
+  rent: 175,
+  electricityCurrent: 100
+}), 'readingNegative', 'Update invoice rejects negative reading atomically');
+near(Store.getInvoice(createdInv.id).rent, 160, 'Failed updateInvoice does not mutate rent');
+
+const patchedInvRes = Store.updateInvoice(createdInv.id, {
+  rent: 170,
+  electricityCurrent: 300,
+  waterCurrent: 56,
+  otherCharges: 0,
+  discount: 5
+});
+check(patchedInvRes.ok, 'Update invoice accepts rent and inline electricity/water readings');
+// 170 rent + (100 * 0.25 = 25) + (16 * 0.5 = 8) - 5 discount = 198
+near(Store.getInvoice(createdInv.id).total, 198, 'Updated invoice recalculates total from inline readings');
+near(Store.getReadings().find((r) => r.roomId === newRoom.id && r.period === current && r.utility === 'electricity').current,
+  300, 'Update invoice syncs electricity meter reading');
+
+// Batch generateInvoices with inline readings array
+const batchRoom = Store.createRoom({ locationId: newLoc.id, number: 'T-02', monthlyRent: 120 }).record;
+const batchTenant = Store.createTenant({ nameKm: 'អ្នកជួល ២', nameEn: 'Tenant Two', phone: '012888777' }).record;
+Store.assignTenant({ tenantId: batchTenant.id, roomId: batchRoom.id, startDate: current + '-01', monthlyRent: 120 });
+
+const batchRes = Store.generateInvoices({
+  period: current,
+  locationId: newLoc.id,
+  readings: [{ roomId: batchRoom.id, electricityCurrent: 40, waterCurrent: 10 }]
+});
+check(batchRes.ok, 'Batch generateInvoices succeeds with inline readings');
+equal(batchRes.result.created, 1, 'Batch generate creates invoice for unbilled room');
+const batchInv = Store.getInvoiceList({ period: current, roomId: batchRoom.id })[0];
+// 120 rent + (40 * 0.25 = 10) + (10 * 0.5 = 5) = 135
+near(batchInv.total, 135, 'Batch generated invoice includes inline electricity and water charges');
+
+Store.resetDemoData();
 console.log('Management tests passed: ' + checks + ' assertions.');
