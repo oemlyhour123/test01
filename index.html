@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1f36">
+  <title>ប្រព័ន្ធគ្រប់គ្រងការជួលបន្ទប់</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/khmer-fonts.css">
+  <style>
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1f36; color: #dbeafe; font-family: "Noto Sans Khmer", sans-serif; }
+    .splash { text-align: center; line-height: 1.8; }
+    .splash-mark { width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 18px; display: grid; place-items: center; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); font-size: 24px; }
+    .splash a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <div class="splash">
+    <div class="splash-mark">🏢</div>
+    <h1>ប្រព័ន្ធគ្រប់គ្រងការជួលបន្ទប់</h1>
+    <p>កំពុងបើកប្រព័ន្ធ... / Opening RRMS...</p>
+    <p><a href="login.html" id="fallbackLink">ចូលប្រើប្រាស់</a></p>
+  </div>
+  <script src="js/config.js"></script>
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      var session = window.RRMS && window.RRMS.Auth ? window.RRMS.Auth.getSession() : null;
+      window.location.replace(session ? 'pages/dashboard.html' : 'login.html');
+    })();
+  </script>
+</body>
+</html>

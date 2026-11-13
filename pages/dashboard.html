@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1f36">
+  <meta name="description" content="ប្រព័ន្ធគ្រប់គ្រងការជួលបន្ទប់ និងការគិតថ្លៃប្រចាំខែ">
+  <title>ផ្ទាំងគ្រប់គ្រង | ប្រព័ន្ធគ្រប់គ្រងការជួលបន្ទប់</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../css/khmer-fonts.css">
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <link rel="stylesheet" href="../css/dashboard.css">
+  <link rel="stylesheet" href="../css/mobile.css">
+</head>
+<body class="app-body" data-page="dashboard">
+  <a class="skip-link" href="#mainContent">រំលងទៅខ្លឹមសារសំខាន់</a>
+
+  <div class="app-shell" id="appShell">
+    <aside class="sidebar" id="sidebar" aria-label="ម៉ឺនុយមេ">
+      <div class="sidebar-brand">
+        <a class="brand" href="dashboard.html">
+          <span class="brand-mark" data-icon="building" data-size="22"></span>
+          <span class="brand-text">
+            <strong data-i18n="app.title"></strong>
+            <small>RRMS • PHASE 1</small>
+          </span>
+        </a>
+        <button type="button" class="icon-button sidebar-toggle" id="sidebarToggle"
+                aria-label="បើក ឬបិទម៉ឺនុយ" data-i18n-aria-label="topbar.menuToggle">
+          <span data-icon="chevronLeft" data-size="18"></span>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <p class="nav-label" data-i18n="nav.mainMenu"></p>
+        <button type="button" class="nav-item is-active" data-nav="dashboard">
+          <span class="nav-icon" data-icon="dashboard" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.dashboard"></span>
+        </button>
+        <button type="button" class="nav-item" data-nav="rooms">
+          <span class="nav-icon" data-icon="door" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.rooms"></span>
+          <span class="phase-pill" aria-hidden="true">2</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="tenants">
+          <span class="nav-icon" data-icon="users" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.tenants"></span>
+          <span class="phase-pill" aria-hidden="true">2</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="invoices">
+          <span class="nav-icon" data-icon="receipt" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.invoices"></span>
+          <span class="phase-pill" aria-hidden="true">5</span>
+        </button>
+
+        <p class="nav-label" data-i18n="nav.management"></p>
+        <button type="button" class="nav-item" data-nav="locations">
+          <span class="nav-icon" data-icon="building" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.locations"></span>
+          <span class="phase-pill" aria-hidden="true">2</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="meterReadings">
+          <span class="nav-icon" data-icon="gauge" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.meterReadings"></span>
+          <span class="phase-pill" aria-hidden="true">3</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="payments">
+          <span class="nav-icon" data-icon="wallet" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.payments"></span>
+          <span class="phase-pill" aria-hidden="true">5</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="reports">
+          <span class="nav-icon" data-icon="chart" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.reports"></span>
+          <span class="phase-pill" aria-hidden="true">6</span>
+        </button>
+        <button type="button" class="nav-item" data-nav="settings">
+          <span class="nav-icon" data-icon="settings" data-size="20"></span>
+          <span class="nav-text" data-i18n="nav.settings"></span>
+          <span class="phase-pill" aria-hidden="true">7</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <span class="avatar avatar-small" data-user-avatar>A</span>
+          <span class="sidebar-user-copy">
+            <strong data-user-name>អ្នកគ្រប់គ្រងសាកល្បង</strong>
+            <small data-user-role>អ្នកគ្រប់គ្រង</small>
+          </span>
+          <span class="sidebar-user-dot" aria-hidden="true"></span>
+        </div>
+        <p class="sidebar-note" data-i18n="more.demoNote"></p>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar" id="topbar">
+        <button type="button" class="icon-button mobile-search-toggle" id="mobileSearchToggle"
+                aria-label="ស្វែងរកទូទៅ" data-i18n-aria-label="topbar.searchLabel">
+          <span data-icon="search" data-size="20"></span>
+        </button>
+
+        <div class="breadcrumbs">
+          <span class="breadcrumb-icon" data-icon="home" data-size="16"></span>
+          <span data-i18n="nav.dashboard"></span>
+        </div>
+
+        <div class="topbar-search" id="searchWrap">
+          <span class="search-icon" data-icon="search" data-size="18"></span>
+          <input type="search" id="globalSearch" autocomplete="off" spellcheck="false"
+                 aria-label="ស្វែងរកទូទៅ" data-i18n-aria-label="search.label"
+                 placeholder="ស្វែងរកឈ្មោះ លេខបន្ទប់ លេខទូរស័ព្ទ ឬវិក្កយបត្រ..."
+                 data-i18n-placeholder="search.placeholder" aria-expanded="false">
+          <kbd class="search-kbd">/</kbd>
+          <div class="search-panel" id="searchPanel" hidden></div>
+        </div>
+
+        <div class="topbar-actions">
+          <button type="button" class="demo-pill" id="demoAboutBtn" title="អំពីគំរូនេះ" data-i18n-title="demo.about">
+            <span class="demo-dot" aria-hidden="true"></span>
+            <span data-i18n="topbar.demoPill"></span>
+          </button>
+
+          <div class="lang-switch" id="langSwitch">
+            <button type="button" class="lang-button" id="langButton" aria-haspopup="true">
+              <span data-icon="globe" data-size="17"></span>
+              <span id="langLabel">ខ្មែរ</span>
+              <span class="lang-chevron" data-icon="chevronDown" data-size="14"></span>
+            </button>
+            <div class="popover-menu lang-menu" id="langMenu" hidden>
+              <button type="button" data-set-lang="km" class="is-active">ខ្មែរ</button>
+              <button type="button" data-set-lang="en">English</button>
+            </div>
+          </div>
+
+          <button type="button" class="icon-button notif-button" id="notifButton"
+                  aria-label="ការជូនដំណឹង" data-i18n-aria-label="reminders.bellLabel">
+            <span data-icon="bell" data-size="20"></span>
+            <span class="notif-dot" id="notifDot" aria-hidden="true"></span>
+          </button>
+
+          <button type="button" class="avatar-button" id="avatarButton" aria-label="គណនី">
+            <span class="avatar" data-user-avatar>A</span>
+          </button>
+        </div>
+
+        <div class="notif-panel" id="notifPanel" hidden></div>
+      </header>
+
+      <main class="page" id="mainContent">
+        <div class="page-heading">
+          <div>
+            <p class="eyebrow" data-i18n="dashboard.kicker"></p>
+            <h1 data-i18n="dashboard.title"></h1>
+            <p class="page-subtitle" data-i18n="dashboard.subtitle"></p>
+          </div>
+          <div class="page-actions">
+            <span class="period-chip">
+              <span data-icon="calendar" data-size="16"></span>
+              <span id="periodLabel">—</span>
+            </span>
+            <button type="button" class="button button-secondary button-icon-text" id="printBtn">
+              <span data-icon="printer" data-size="17"></span>
+              <span data-i18n="dashboard.print"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="demo-banner" id="demoBanner">
+          <span class="demo-banner-icon" data-icon="info" data-size="18"></span>
+          <p data-i18n="demo.notice"></p>
+          <button type="button" class="link-button" id="demoAboutLink" data-i18n="demo.about"></button>
+        </div>
+
+        <section class="filter-bar" aria-label="តម្រងទិន្នន័យ" data-i18n-aria-label="dashboard.filters">
+          <div class="filter-field">
+            <label for="monthFilter" data-i18n="dashboard.selectMonth"></label>
+            <div class="select-wrap">
+              <span class="select-icon" data-icon="calendar" data-size="16"></span>
+              <select id="monthFilter"></select>
+              <span class="select-chevron" data-icon="chevronDown" data-size="14"></span>
+            </div>
+          </div>
+          <div class="filter-field">
+            <label for="locationFilter" data-i18n="dashboard.selectLocation"></label>
+            <div class="select-wrap">
+              <span class="select-icon" data-icon="building" data-size="16"></span>
+              <select id="locationFilter"></select>
+              <span class="select-chevron" data-icon="chevronDown" data-size="14"></span>
+            </div>
+          </div>
+          <div class="quick-filters" role="group" aria-label="រយៈពេលរហ័ស">
+            <button type="button" class="chip-button" data-quick="current" data-i18n="dashboard.currentMonth"></button>
+            <button type="button" class="chip-button" data-quick="last" data-i18n="dashboard.lastMonth"></button>
+          </div>
+          <button type="button" class="button button-ghost button-small reset-button" id="resetFilters">
+            <span data-icon="refresh" data-size="15"></span>
+            <span data-i18n="dashboard.resetFilters"></span>
+          </button>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div>
+              <h2 data-i18n="dashboard.summaryTitle"></h2>
+              <p data-i18n="dashboard.summarySubtitle"></p>
+            </div>
+          </div>
+          <div class="summary-grid" id="summaryGrid"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div>
+              <h2 data-i18n="properties.title"></h2>
+              <p data-i18n="properties.subtitle"></p>
+            </div>
+          </div>
+          <div class="property-grid" id="propertyGrid"></div>
+        </section>
+
+        <section class="section">
+          <div class="section-heading">
+            <div>
+              <h2 data-i18n="charts.title"></h2>
+              <p data-i18n="charts.subtitle"></p>
+            </div>
+          </div>
+          <div class="charts-grid">
+            <article class="chart-card chart-revenue">
+              <div class="chart-heading">
+                <h3 data-i18n="charts.revenue"></h3>
+                <p data-i18n="charts.revenueSub"></p>
+              </div>
+              <div class="chart-body">
+                <canvas id="revenueChart" role="img" aria-label="ចំណូល និងប្រាក់ទទួលបាន"></canvas>
+              </div>
+            </article>
+
+            <article class="chart-card chart-occupancy">
+              <div class="chart-heading">
+                <h3 data-i18n="charts.occupancy"></h3>
+                <p data-i18n="charts.occupancySub"></p>
+              </div>
+              <div class="chart-body chart-doughnut-body">
+                <canvas id="occupancyChart" role="img" aria-label="អត្រាការជួល"></canvas>
+                <div class="doughnut-center">
+                  <strong id="occupancyRate">0%</strong>
+                  <span data-i18n="charts.occupancyRate"></span>
+                </div>
+              </div>
+            </article>
+
+            <article class="chart-card chart-utility">
+              <div class="chart-heading">
+                <h3 data-i18n="charts.utility"></h3>
+                <p data-i18n="charts.utilitySub"></p>
+              </div>
+              <div class="chart-body chart-body-tall">
+                <canvas id="utilityChart" role="img" aria-label="ការប្រើប្រាស់អគ្គិសនី និងទឹក"></canvas>
+              </div>
+            </article>
+
+            <article class="chart-card chart-outstanding">
+              <div class="chart-heading">
+                <h3 data-i18n="charts.outstanding"></h3>
+                <p data-i18n="charts.outstandingSub"></p>
+              </div>
+              <div class="chart-body chart-body-tall">
+                <canvas id="outstandingChart" role="img" aria-label="ប្រាក់មិនទាន់ទូទាត់"></canvas>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <div class="dashboard-bottom">
+          <section class="section invoices-section">
+            <div class="section-heading">
+              <div>
+                <h2 data-i18n="invoices.recentTitle"></h2>
+                <p data-i18n="invoices.recentSub"></p>
+              </div>
+              <span class="count-pill" id="invoiceCount">—</span>
+            </div>
+
+            <div class="card invoice-table-card">
+              <div class="table-wrap">
+                <table class="data-table" aria-label="វិក្កយបត្រថ្មីៗ">
+                  <thead>
+                    <tr>
+                      <th data-i18n="invoices.number"></th>
+                      <th data-i18n="invoices.tenant"></th>
+                      <th class="align-right" data-i18n="invoices.total"></th>
+                      <th class="align-right" data-i18n="invoices.balance"></th>
+                      <th data-i18n="invoices.status"></th>
+                      <th class="cell-arrow"><span class="sr-only" data-i18n="common.view"></span></th>
+                    </tr>
+                  </thead>
+                  <tbody id="invoiceTableBody"></tbody>
+                </table>
+              </div>
+              <div class="invoice-card-list" id="invoiceCardList"></div>
+            </div>
+          </section>
+
+          <section class="section reminders-section">
+            <div class="section-heading">
+              <div>
+                <h2 data-i18n="reminders.title"></h2>
+                <p data-i18n="reminders.sub"></p>
+              </div>
+            </div>
+            <div class="card reminders-card" id="remindersList"></div>
+          </section>
+        </div>
+
+        <footer class="page-footer">
+          <span data-i18n="app.title"></span>
+          <span class="page-footer-dot" aria-hidden="true">•</span>
+          <span>Phase 1 · v0.1.0</span>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <nav class="mobile-nav" aria-label="ម៉ឺនុយចល័ត">
+    <button type="button" class="mobile-nav-item is-active" data-nav="dashboard">
+      <span data-icon="dashboard" data-size="21"></span>
+      <span data-i18n="nav.dashboard"></span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-nav="rooms">
+      <span data-icon="door" data-size="21"></span>
+      <span data-i18n="nav.rooms"></span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-nav="tenants">
+      <span data-icon="users" data-size="21"></span>
+      <span data-i18n="nav.tenants"></span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-nav="invoices">
+      <span data-icon="receipt" data-size="21"></span>
+      <span data-i18n="nav.invoices"></span>
+    </button>
+    <button type="button" class="mobile-nav-item" data-more-button>
+      <span data-icon="grid" data-size="21"></span>
+      <span data-i18n="nav.more"></span>
+    </button>
+  </nav>
+
+  <button type="button" class="fab" id="fabButton" aria-label="បន្ថែមថ្មី" data-i18n-aria-label="fab.label">
+    <span data-icon="plus" data-size="24"></span>
+  </button>
+
+  <script src="../js/config.js"></script>
+  <script src="../js/icons.js"></script>
+  <script src="../js/translations.js"></script>
+  <script src="../js/i18n.js"></script>
+  <script src="../js/format.js"></script>
+  <script src="../js/demo-data.js"></script>
+  <script src="../js/store.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../assets/vendor/chart.umd.min.js"></script>
+  <script src="../js/dashboard.js"></script>
+</body>
+</html>

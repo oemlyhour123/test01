@@ -1,0 +1,14 @@
+# Dependencies and local tooling
+node_modules/
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+
+# Vercel
+.vercel/
