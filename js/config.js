@@ -1,7 +1,7 @@
 /* ==========================================================================
    RRMS — Application configuration
    --------------------------------------------------------------------------
-   Phase 2 runs in demo mode with deterministic sample records plus browser-
+   Phases 2–7 run in demo mode with deterministic sample records plus browser-
    local management changes. To connect Supabase later:
      1. Set demoMode to false.
      2. Fill in supabase.url and supabase.anonKey (NEVER the service-role key).
@@ -13,8 +13,8 @@
   window.RRMS = window.RRMS || {};
 
   var Config = {
-    version: '0.2.0',
-    phase: 2,
+    version: '0.7.0',
+    phase: 7,
     demoMode: true,
 
     supabase: {

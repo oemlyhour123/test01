@@ -1,16 +1,17 @@
 {
   "name": "rrms",
-  "version": "0.1.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "RRMS — Khmer-first bilingual residential rental management prototype with PostgreSQL schema",
+  "description": "RRMS — Khmer-first bilingual residential rental management system with PostgreSQL schema",
   "main": "scripts/serve.js",
   "type": "commonjs",
   "scripts": {
     "start": "node scripts/serve.js 8765",
     "serve": "node scripts/serve.js 8765",
     "test": "node tests/store.test.js",
+    "test:phases": "node tests/management.test.js",
     "test:db": "node tests/database/schema.test.js && node tests/database/demo.test.js",
-    "test:all": "npm test && npm run test:db"
+    "test:all": "npm test && npm run test:phases && npm run test:db"
   },
   "keywords": [
     "rental-management",

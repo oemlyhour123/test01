@@ -1,11 +1,11 @@
 # Operations Guide
 
-This guide covers running the prototype, provisioning the database, managing roles,
+This guide covers running the application, provisioning the database, managing roles,
 rebuilding demo data, correcting financial records and deploying to production later.
 
 ---
 
-## 1. Run the prototype locally
+## 1. Run the application locally
 
 ### Option A — included server (recommended)
 
@@ -20,7 +20,7 @@ correct MIME types for woff2, SVG, JS, CSS and SQL.
 
 Open `login.html` directly. The app uses classic scripts and self-hosted assets, so it
 works over `file://`. Browser print and localStorage still work; some browsers restrict
-storage for `file://`, in which case the language choice simply does not persist.
+storage for `file://`, in which case preferences and demo edits do not persist.
 
 ### Option C — any static host
 
@@ -34,6 +34,17 @@ admin@rrms.local / rrms2026
 ```
 
 The session is a local demo object, expires after 12 hours and is not production auth.
+
+After sign-in, every module is reachable from the sidebar/bottom navigation or by hash
+route:
+
+```text
+#/dashboard   #/locations  #/rooms      #/tenants   #/tenancies
+#/meters      #/invoices   #/payments   #/reports   #/settings
+```
+
+Demo writes persist in the browser under `rrms.demo.v2`. See
+[section 5](#5-demo-data-lifecycle) for reset procedures.
 
 ---
 
@@ -101,9 +112,10 @@ supabase: {
 }
 ```
 
-At the time of writing, `auth.js` can use Supabase Auth, but the dashboard `Store` still
-reads demo records. Complete the Store adapter before presenting live financial data. Do
-not set `demoMode: false` in a production demo until that adapter ships.
+At the time of writing, `auth.js` can use Supabase Auth, but the application `Store` still
+reads and writes demo records. Complete the Store adapter before presenting live financial
+data. Do not set `demoMode: false` in a production demo until that adapter ships. All
+screens already call the Store contract, so the adapter does not require view changes.
 
 ---
 
@@ -233,13 +245,49 @@ tenancies, meters and rates. If those changed, truncate them in dependency order
 
 ### Reset only browser state
 
-Demo records regenerate on every page load. Clear localStorage to reset preferences:
+Demo records are generated on first load and then persisted so module edits survive a
+reload. Three levels of reset are available:
 
 ```js
+// 1. Preferences only
 localStorage.removeItem('rrms.lang');
 localStorage.removeItem('rrms.session');
 localStorage.removeItem('rrms.sidebar.collapsed');
+
+// 2. Discard every demo edit (same as Settings → Reset demo data)
+localStorage.removeItem('rrms.demo.v2');
+
+// 3. Everything for this origin
+localStorage.clear();
 ```
+
+The snapshot also invalidates itself when the demo seed date changes, so a redeploy with a
+new seed starts from fresh records. Reset demo data rebuilds in place without a page
+reload and emits a data-change event so the dashboard and active module refresh.
+
+### Operating workflow
+
+The modules follow the same order in demo mode and in the future live adapter:
+
+1. **Locations** — create the property and set electricity/water rates and default rent.
+2. **Rooms** — add rooms; each new room gets an electricity and a water meter.
+3. **Tenants** — record the tenant's Khmer/English name and contact details.
+4. **Tenancies** — assign the tenant to a room with a start date, rent and deposit.
+   Overlapping active tenancies are rejected.
+5. **Meter readings** — enter the current reading for each utility before billing. Usage
+   and amount calculate live from the previous reading and the location rate.
+6. **Invoices** — generate the month's invoices for a property. Rent comes from the
+   tenancy; utilities come from saved readings. Missing readings are reported, not
+   invented.
+7. **Payments** — open an invoice and record a payment. The invoice balance and status
+   update immediately.
+8. **Reports** — review billed, collected, outstanding, occupancy and utility trends for
+   the month.
+9. **Settings** — adjust company details, currency display and invoice defaults; reset demo
+   data when you want a clean slate.
+
+Deleting a location, room, tenant or tenancy is rejected while dependent financial or
+occupancy records exist. End a tenancy instead of deleting it to preserve history.
 
 ---
 
@@ -366,7 +414,7 @@ outside the web root.
 
 ## 8. Migrations
 
-Phase 1 has no migration framework. For later changes:
+The project has no migration framework yet. For later changes:
 
 1. Create `database/migrations/YYYYMMDD_description.sql`.
 2. Wrap in `begin; ... commit;`.
@@ -425,8 +473,8 @@ select last_value from public.invoice_number_seq;
 select last_value from public.payment_number_seq;
 ```
 
-The dashboard is read-only in Phase 1 and does not schedule jobs. Later phases should run
-these on a schedule:
+The application does not schedule background jobs. Later integrations should run these on
+a schedule:
 
 - generate monthly invoices from confirmed readings;
 - create missing-reading and contract-expiry notifications;
@@ -469,6 +517,9 @@ Before exposing the system beyond localhost:
 | `Confirmed readings cannot be edited` | Reading already confirmed | Void and re-enter |
 | `Cannot allocate a void payment` | Payment status void | Create a new payment |
 | Demo seed inserts nothing | `settings.demo.seeded_at` exists | Delete the marker, then rerun |
+| Demo edits disappeared | Snapshot removed, seed date changed, or another browser profile | Re-enter data or use Settings → Reset demo data; snapshot is per origin |
+| Module shows a raw key like `rooms.title` | Missing dictionary entry | Add the key to `js/translations.js` or `js/translations-extended.js` |
+| A module route shows the dashboard | Hash not recognised | Use one of `#/dashboard`, `#/locations`, `#/rooms`, `#/tenants`, `#/tenancies`, `#/meters`, `#/invoices`, `#/payments`, `#/reports`, `#/settings` |
 | `auth.uid()` is null in SQL editor | SQL editor has no JWT | Use `set_config` locally; in Supabase use the API as a signed-in user |
 | PGlite test cannot find module | Dev dependencies not installed | `npm install` |
 | Khmer glyphs broken | Font files missing or wrong MIME | Keep `assets/fonts/` and serve woff2 as `font/woff2` |
@@ -488,4 +539,7 @@ Before exposing the system beyond localhost:
 - [ ] Backup taken.
 - [ ] `js/config.js` contains only the anon key.
 - [ ] Browser console clean; tested at 360, 768 and 1440 px.
+- [ ] All ten routes load (`#/dashboard` plus the nine modules), including a hard reload
+      on a deep link.
+- [ ] Demo reset works and clears `rrms.demo.v2`.
 - [ ] Print preview checked on A4.

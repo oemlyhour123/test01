@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="../css/components.css">
   <link rel="stylesheet" href="../css/dashboard.css">
   <link rel="stylesheet" href="../css/mobile.css">
+  <link rel="stylesheet" href="../css/management.css">
 </head>
 <body class="app-body" data-page="dashboard">
   <a class="skip-link" href="#mainContent">រំលងទៅខ្លឹមសារសំខាន់</a>
@@ -23,7 +24,7 @@
           <span class="brand-mark" data-icon="building" data-size="22"></span>
           <span class="brand-text">
             <strong data-i18n="app.title"></strong>
-            <small>RRMS • PHASE 1</small>
+            <small>RRMS • PHASE 7</small>
           </span>
         </a>
         <button type="button" class="icon-button sidebar-toggle" id="sidebarToggle"
@@ -41,44 +42,36 @@
         <button type="button" class="nav-item" data-nav="rooms">
           <span class="nav-icon" data-icon="door" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.rooms"></span>
-          <span class="phase-pill" aria-hidden="true">2</span>
         </button>
         <button type="button" class="nav-item" data-nav="tenants">
           <span class="nav-icon" data-icon="users" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.tenants"></span>
-          <span class="phase-pill" aria-hidden="true">2</span>
         </button>
         <button type="button" class="nav-item" data-nav="invoices">
           <span class="nav-icon" data-icon="receipt" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.invoices"></span>
-          <span class="phase-pill" aria-hidden="true">5</span>
         </button>
 
         <p class="nav-label" data-i18n="nav.management"></p>
         <button type="button" class="nav-item" data-nav="locations">
           <span class="nav-icon" data-icon="building" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.locations"></span>
-          <span class="phase-pill" aria-hidden="true">2</span>
         </button>
         <button type="button" class="nav-item" data-nav="meterReadings">
           <span class="nav-icon" data-icon="gauge" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.meterReadings"></span>
-          <span class="phase-pill" aria-hidden="true">3</span>
         </button>
         <button type="button" class="nav-item" data-nav="payments">
           <span class="nav-icon" data-icon="wallet" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.payments"></span>
-          <span class="phase-pill" aria-hidden="true">5</span>
         </button>
         <button type="button" class="nav-item" data-nav="reports">
           <span class="nav-icon" data-icon="chart" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.reports"></span>
-          <span class="phase-pill" aria-hidden="true">6</span>
         </button>
         <button type="button" class="nav-item" data-nav="settings">
           <span class="nav-icon" data-icon="settings" data-size="20"></span>
           <span class="nav-text" data-i18n="nav.settings"></span>
-          <span class="phase-pill" aria-hidden="true">7</span>
         </button>
       </nav>
 
@@ -104,7 +97,7 @@
 
         <div class="breadcrumbs">
           <span class="breadcrumb-icon" data-icon="home" data-size="16"></span>
-          <span data-i18n="nav.dashboard"></span>
+          <span id="breadcrumbLabel" data-i18n="nav.dashboard"></span>
         </div>
 
         <div class="topbar-search" id="searchWrap">
@@ -150,6 +143,7 @@
       </header>
 
       <main class="page" id="mainContent">
+        <div class="view-stack" id="dashboardView">
         <div class="page-heading">
           <div>
             <p class="eyebrow" data-i18n="dashboard.kicker"></p>
@@ -319,8 +313,11 @@
         <footer class="page-footer">
           <span data-i18n="app.title"></span>
           <span class="page-footer-dot" aria-hidden="true">•</span>
-          <span>Phase 1 · v0.1.0</span>
+          <span data-app-version>Phase 7 · v0.7.0</span>
         </footer>
+        </div>
+
+        <div class="view-stack" id="moduleView" hidden></div>
       </main>
     </div>
   </div>
@@ -355,6 +352,7 @@
   <script src="../js/config.js"></script>
   <script src="../js/icons.js"></script>
   <script src="../js/translations.js"></script>
+  <script src="../js/translations-extended.js"></script>
   <script src="../js/i18n.js"></script>
   <script src="../js/format.js"></script>
   <script src="../js/demo-data.js"></script>
@@ -364,5 +362,6 @@
   <script src="../js/app.js"></script>
   <script src="../assets/vendor/chart.umd.min.js"></script>
   <script src="../js/dashboard.js"></script>
+  <script src="../js/manager.js"></script>
 </body>
 </html>

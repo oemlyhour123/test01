@@ -2,12 +2,18 @@
 
 RRMS is deliberately split into two deliverables that can evolve independently:
 
-1. a **static, offline-capable Khmer-first dashboard** that runs today; and
+1. a **static, offline-capable Khmer-first application** that runs today; and
 2. a **PostgreSQL/Supabase schema** that defines the durable data model, security and
    financial rules for later phases.
 
-The browser currently reads deterministic demo records. The schema is not yet wired to the
-dashboard; the `Store` module is the seam where that integration will happen.
+The browser currently reads deterministic demo records, persists demo edits locally and
+reports every figure from those records. The schema is not yet wired to the application;
+the `Store` module is the seam where that integration will happen.
+
+All seven delivery phases are implemented. The interface is one shell with two view
+stacks: the dashboard (`#/dashboard`) and the management modules (`#/locations`,
+`#/rooms`, `#/tenants`, `#/tenancies`, `#/meters`, `#/invoices`, `#/payments`,
+`#/reports`, `#/settings`).
 
 ---
 
@@ -18,12 +24,13 @@ flowchart TB
   subgraph Browser["Browser (static assets, no build step)"]
     Pages["login.html<br/>pages/dashboard.html"]
     Shell["app.js · ui.js · icons.js"]
-    I18n["translations.js · i18n.js · format.js"]
+    I18n["translations.js · translations-extended.js<br/>i18n.js · format.js"]
     Dashboard["dashboard.js<br/>filters · charts · modals"]
-    Store["store.js<br/>domain queries + aggregation"]
+    Manager["manager.js<br/>locations · rooms · tenants · tenancies<br/>meters · invoices · payments · reports · settings"]
+    Store["store.js<br/>domain queries, CRUD + aggregation"]
     Demo["demo-data.js<br/>deterministic records"]
     Chart["Chart.js 4.4.7<br/>(self-hosted)"]
-    Storage[("localStorage<br/>language · session · sidebar")]
+    Storage[("localStorage<br/>language · session · sidebar<br/>demo snapshot")]
   end
 
   subgraph Backend["Supabase (target, Phase 2+)"]
@@ -35,9 +42,13 @@ flowchart TB
   Pages --> Shell
   Pages --> I18n
   Pages --> Dashboard
+  Pages --> Manager
   Dashboard --> Store
+  Manager --> Store
   Store --> Demo
+  Store --> Storage
   Dashboard --> Chart
+  Manager --> Chart
   Shell --> Storage
   I18n --> Storage
 
@@ -61,15 +72,16 @@ Runtime rules:
 
 | Layer | Files | Responsibility |
 | --- | --- | --- |
-| Pages | `index.html`, `login.html`, `pages/dashboard.html` | Semantic shells, stable element IDs, accessible labels |
-| Configuration | `js/config.js` | Demo mode, language defaults, currency, storage keys, Supabase placeholders |
-| Presentation shell | `js/app.js`, `js/ui.js`, `js/icons.js` | Sidebar/top bar, search, notifications, modals, toasts, roadmap dialogs |
-| Localization | `js/translations.js`, `js/i18n.js`, `js/format.js` | Central dictionary, DOM binding, language state, money/date/period formats |
+| Pages | `index.html`, `login.html`, `pages/dashboard.html` | Semantic shells, two view stacks (dashboard + modules), stable element IDs, accessible labels |
+| Configuration | `js/config.js` | Demo mode, language defaults, currency, storage keys, phase/version, Supabase placeholders |
+| Presentation shell | `js/app.js`, `js/ui.js`, `js/icons.js` | Sidebar/top bar, hash routing, search, notifications, modals, toasts |
+| Localization | `js/translations.js`, `js/translations-extended.js`, `js/i18n.js`, `js/format.js` | Central dictionaries (merged at load), DOM binding, language state, money/date/period formats |
 | Dashboard | `js/dashboard.js` | Filters, KPIs, property cards, four charts, invoice table, reminders, detail views |
-| Domain/data | `js/store.js` | Joins, totals, balances, occupancy, search, reminder derivation |
+| Management modules | `js/manager.js` | Locations, rooms, tenants, tenancies, readings, invoices, payments, reports, settings |
+| Domain/data | `js/store.js` | Joins, totals, balances, occupancy, search, CRUD, local persistence, reminder derivation |
 | Demo source | `js/demo-data.js` | Seeded 12-month record generator (seed `20261112`) |
 | Auth | `js/auth.js` | Demo session (12 h) and optional Supabase Auth adapter |
-| Styling | `css/*.css` | Design tokens, shell, components, dashboard, responsive and print rules |
+| Styling | `css/*.css` | Design tokens, shell, components, dashboard, management modules, responsive and print rules |
 
 ### Data flow: dashboard render
 
@@ -96,12 +108,50 @@ sequenceDiagram
 Every number on the page is calculated from records in `Store`. The dashboard does not
 contain hardcoded totals. Changing the month or location re-runs the aggregation.
 
+### Data flow: module write and refresh
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant M as manager.js
+  participant S as store.js
+  participant L as localStorage
+  participant D as dashboard.js
+
+  U->>M: Submit create/edit form
+  M->>S: createRoom() / saveReading() / recordPayment() …
+  S->>S: validate domain rules
+  alt invalid
+    S-->>M: { ok: false, code }
+    M-->>U: localized inline/toast error
+  else valid
+    S->>L: persist demo snapshot (rrms.demo.v2)
+    S-->>M: { ok: true, record }
+    S-->>D: rrms:data-change event
+    M->>M: re-render the active module
+    D->>S: getDashboard(filters)
+    D->>D: refresh KPIs, charts and tables
+  end
+```
+
+Module views are rendered on demand into `#moduleView`; the dashboard lives in
+`#dashboardView`. `hashchange` selects exactly one stack, and `.view-stack[hidden]` keeps
+the inactive stack out of layout and the accessibility tree.
+
+Demo persistence is a single snapshot:
+
+- the snapshot key is `rrms.demo.v2`;
+- it stores a deep copy of the generated dataset after every successful write;
+- it is ignored when its `seedDate` no longer matches the generated demo seed;
+- **Reset demo data** deletes the key and rebuilds from `demo-data.js` in place.
+
 ### Public Store contract
 
-`RRMS.Store` exposes a small read-only API. A future Supabase adapter must preserve this
-shape so `dashboard.js` and `app.js` do not change:
+`RRMS.Store` exposes a read/write API. A future Supabase adapter must preserve this shape
+so `dashboard.js`, `manager.js` and `app.js` do not change:
 
 ```text
+-- reads
 getMeta()                     getLocations()          getLocation(id)
 getRooms()                    getRoom(id)             getTenants()
 getTenant(id)                 getTenancies()          getInvoices()
@@ -111,19 +161,40 @@ getReadings()                 getSettings()           getPeriods()
 monthOptions()                getDashboard(filters)   getNotifications()
 getTenantDetails(id)          getRoomDetails(id)      getOpenInvoicesForTenant(id)
 tenancyForRoom(id)            displayStatus(invoice)  search(query)
+getLocationList()             getRoomList(f)          getTenantList(f)
+getTenancyList(f)             getInvoiceList(f)       getPaymentList(f)
+getReportData(period, loc)
+
+-- writes (all return { ok, record } or { ok: false, code, params })
+createLocation / updateLocation / deleteLocation
+createRoom / updateRoom / deleteRoom
+createTenant / updateTenant / deleteTenant
+assignTenant / endTenancy / updateTenancy / deleteTenancy
+saveReading / deleteReading
+generateInvoices / updateInvoice / deleteInvoice
+recordPayment / deletePayment
+updateSettings / resetDemoData
 ```
+
+Domain validation lives in `Store` (for example `roomOccupied`, `tenantOccupied`,
+`invoiceHasPayments`, `locationHasRooms`). Views translate the returned `code`; they do not
+re-implement the rule.
 
 ### Responsive behaviour
 
-- Desktop (≥ 901 px): fixed sidebar, top bar, 12-column-ish dashboard grid.
+- Desktop (≥ 901 px): fixed sidebar, top bar, 12-column-ish dashboard grid; module pages
+  use summary cards, filter bars and full tables.
 - Tablet and mobile (≤ 900 px): the sidebar is replaced by a five-item bottom navigation,
   search becomes an overlay, the invoice table becomes a card list, and detail modals
   become bottom sheets. Summaries stay two-column at 768 px and narrow phones.
+- Module tables collapse to labeled cards below 760 px; filter selects stack and forms
+  become single-column. Header actions wrap without horizontal scroll.
 - Phone (≤ 560 px): tighter spacing, icon-only language control and compact top-bar
   actions.
 - Print: navigation, filters and action buttons are hidden; summary, property and invoice
   content remain.
-- The layout was verified at 360, 390, 768, 1024 and 1440 px with no horizontal overflow.
+- The layout was verified at 360, 390, 768, 1024 and 1440 px across all ten routes with no
+  horizontal overflow.
 
 ---
 
@@ -131,7 +202,10 @@ tenancyForRoom(id)            displayStatus(invoice)  search(query)
 
 The **default and fallback language is Khmer**. English is a secondary option.
 
-- `js/translations.js` is the single dictionary: **309 keys**, each with `km` and `en`.
+- The dictionaries are merged into one namespace at load: `js/translations.js` holds the
+  **309 base keys**, `js/translations-extended.js` adds **250+ management keys**
+  (locations → settings, form labels, confirmations, demo-text overrides), and
+  `js/i18n.js` reads the merged `RRMS.Translations`. Every key has `km` and `en`.
 - `data-i18n`, `data-i18n-placeholder`, `data-i18n-title` and `data-i18n-aria-label`
   bind static markup to keys.
 - `I18n.t(key, params)` supports `{name}` interpolation; missing keys are logged and
@@ -146,7 +220,7 @@ The **default and fallback language is Khmer**. English is a secondary option.
   security control.
 
 Adding a key is a one-file change. Adding a third language would require extending the
-dictionary shape and `Config.languages`; Phase 1 intentionally supports two.
+dictionary shape and `Config.languages`; the application intentionally supports two.
 
 ---
 
@@ -339,7 +413,7 @@ See [ERD.md](ERD.md) for the entity diagram and table dictionary.
 ```mermaid
 flowchart LR
   UI["dashboard.js / app.js"] --> Store["store.js contract"]
-  Store --> Demo["demo-data.js<br/>(Phase 1)"]
+  Store --> Demo["demo-data.js<br/>(generated records)"]
   Store -. "Phase 2/5 adapter" .-> Client["supabase-js<br/>anon key"]
   Client --> RPC["SQL views + RPCs"]
   RPC --> DB[("PostgreSQL + RLS")]
@@ -352,11 +426,12 @@ Planned steps:
    `supabase-js`, views and RPCs.
 2. Switch `Store` selection in `config.js` based on `isSupabaseConfigured()`.
 3. Replace demo session claims with profile data from `profiles` (role, location, tenant).
-4. Add write screens phase by phase; all writes go through RPCs where money is involved.
-5. Add realtime notifications only if needed; polling is sufficient for Phase 1 scale.
+4. Route every write in `manager.js` through the same `Store` method names; money writes
+   go through RPCs.
+5. Add realtime notifications only if needed; polling is sufficient at this scale.
 
 The adapter must not bypass RLS or embed a service-role key. Column names in the views are
-already shaped for the dashboard (names, room number, balance, display status).
+already shaped for the interface (names, room number, balance, display status).
 
 ---
 
@@ -365,6 +440,8 @@ already shaped for the dashboard (names, room number, balance, display status).
 | Decision | Why | Cost |
 | --- | --- | --- |
 | Demo dataset in the browser | Reviewable offline, deterministic, no credentials | Not live data; adapter still required |
+| Local snapshot for demo CRUD | Demonstrates full workflows without a backend | Browser-local only; resets per device |
+| Single `Store` boundary for reads and writes | One seam for the Supabase adapter; views stay dumb | Store grows but rules stay centralized |
 | Classic IIFEs, no bundler | Works from `file://`, zero toolchain | Manual script ordering; no tree-shaking |
 | Khmer default, English secondary | Matches primary users | Every new string must be added twice |
 | `km`/`en` columns in tables | Simple queries, no join for two languages | Adding languages needs schema work |
@@ -379,9 +456,20 @@ already shaped for the dashboard (names, room number, balance, display status).
 
 ## 9. Phase boundaries
 
-Phase 1 deliberately stops at a read-only dashboard plus schema. Screens for rooms,
-tenants, readings, billing, payments, reports and settings are represented by navigation
-entries with phase badges and a roadmap dialog. Adding a screen means implementing its
-Store methods and write RPCs, not changing the shell architecture.
+All delivery phases are implemented in the static application:
+
+| Phase | Screens |
+| --- | --- |
+| 1 | Dashboard, auth shell, schema, documentation |
+| 2 | Locations, rooms, tenants, tenancies |
+| 3 | Meter readings and live utility math |
+| 4 | Invoice generation from tenancies + readings |
+| 5 | Invoice detail, payments, balances |
+| 6 | Reports with KPI cards, charts and property performance |
+| 7 | Settings, demo reset, About/version card |
+
+The remaining boundary is **data**: the browser uses demo records, while the SQL schema and
+RPC contract are ready for the Supabase adapter. Adding live data means implementing the
+Store contract, not changing the shell, views or translation layer.
 
 See [OPERATIONS.md](OPERATIONS.md) for deployment and [QA.md](QA.md) for verification.

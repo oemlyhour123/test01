@@ -357,7 +357,7 @@
 
     function addPayment(invoice, amount, date, method, reference) {
       if (amount <= 0) return;
-      var p = F.parsePeriod(invoice.period);
+      var p = F.parsePeriod(invoice.billingPeriod);
       var payment = {
         id: 'payment-' + pad(paymentId++, 3),
         paymentNumber: nextPaymentNumber(p.year),

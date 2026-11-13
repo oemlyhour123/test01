@@ -79,7 +79,7 @@
 
     UI.modal({
       title: t('demo.title'),
-      kicker: 'RRMS • ' + phaseLabel(1),
+      kicker: 'RRMS • ' + phaseLabel(RRMS.Config.phase),
       body: '<div class="demo-modal-badge">' + Icons.svg('info', 18) + '<span>' +
           UI.esc(t('topbar.demoPill')) + '</span></div>' +
         '<p class="modal-lead">' + UI.esc(t('demo.body')) + '</p>' +
@@ -147,7 +147,10 @@
       button.addEventListener('click', function () {
         var key = button.getAttribute('data-more-nav');
         UI.closeModal();
-        window.setTimeout(function () { openComingSoon(key); }, 180);
+        window.setTimeout(function () {
+          if (RRMS.Manager) RRMS.Manager.navigate(key);
+          else openComingSoon(key);
+        }, 180);
       });
     });
     handle.dialog.querySelectorAll('[data-set-lang]').forEach(function (button) {
@@ -200,9 +203,28 @@
       button.addEventListener('click', function () {
         var module = button.getAttribute('data-fab-action');
         UI.closeModal();
-        window.setTimeout(function () { openComingSoon(module); }, 180);
+        window.setTimeout(function () {
+          if (RRMS.Manager) RRMS.Manager.openCreate(module);
+          else openComingSoon(module);
+        }, 180);
       });
     });
+  }
+
+  function openEntity(type, id) {
+    if (RRMS.Manager && RRMS.Manager.isModuleActive()) {
+      RRMS.Manager.openEntity(type, id);
+      return;
+    }
+    if (type === 'invoice') {
+      document.dispatchEvent(new CustomEvent('rrms:open-invoice', { detail: { id: id } }));
+    } else if (type === 'room') {
+      document.dispatchEvent(new CustomEvent('rrms:open-room', { detail: { id: id } }));
+    } else if (type === 'tenant') {
+      document.dispatchEvent(new CustomEvent('rrms:open-tenant', { detail: { id: id } }));
+    } else if (type === 'location') {
+      document.dispatchEvent(new CustomEvent('rrms:filter-location', { detail: { id: id } }));
+    }
   }
 
   function switchLanguage(lang) {
@@ -330,15 +352,7 @@
       closePanel();
       input.value = '';
       if (topbar) topbar.classList.remove('search-open');
-      if (type === 'invoice') {
-        document.dispatchEvent(new CustomEvent('rrms:open-invoice', { detail: { id: id } }));
-      } else if (type === 'room') {
-        document.dispatchEvent(new CustomEvent('rrms:open-room', { detail: { id: id } }));
-      } else if (type === 'tenant') {
-        document.dispatchEvent(new CustomEvent('rrms:open-tenant', { detail: { id: id } }));
-      } else if (type === 'location') {
-        document.dispatchEvent(new CustomEvent('rrms:filter-location', { detail: { id: id } }));
-      }
+      openEntity(type, id);
     });
 
     document.addEventListener('click', function (event) {
@@ -445,11 +459,8 @@
         updateNotifDot();
         var invoiceId = button.getAttribute('data-notif-invoice');
         var roomId = button.getAttribute('data-notif-room');
-        if (invoiceId) {
-          document.dispatchEvent(new CustomEvent('rrms:open-invoice', { detail: { id: invoiceId } }));
-        } else if (roomId) {
-          document.dispatchEvent(new CustomEvent('rrms:open-room', { detail: { id: roomId } }));
-        }
+        if (invoiceId) openEntity('invoice', invoiceId);
+        else if (roomId) openEntity('room', roomId);
       });
     });
 
@@ -501,7 +512,15 @@
         event.preventDefault();
         var key = button.getAttribute('data-nav');
         if (key === 'dashboard') {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (RRMS.Manager) {
+            RRMS.Manager.navigate('dashboard');
+          } else {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+          return;
+        }
+        if (RRMS.Manager && MODULE_PHASES[key]) {
+          RRMS.Manager.navigate(key);
           return;
         }
         openComingSoon(key);
@@ -578,6 +597,15 @@
     initNotifications();
     initSearch();
     initPrint();
+
+    document.querySelectorAll('[data-app-version]').forEach(function (node) {
+      node.textContent = t('mgmt.phase', { phase: RRMS.Config.phase }) + ' · v' + RRMS.Config.version;
+    });
+    document.addEventListener('rrms:data-change', function () {
+      renderNotifications();
+    });
+    if (RRMS.Manager) RRMS.Manager.init();
+
     document.body.classList.add('is-ready');
   }
 

@@ -823,8 +823,21 @@
     init: init,
     openInvoice: openInvoice,
     openTenant: openTenant,
-    openRoom: openRoom
+    openRoom: openRoom,
+    refresh: function () {
+      if (!Store) return;
+      buildFilters();
+      render();
+    }
   };
+
+  document.addEventListener('rrms:data-change', function () {
+    if (!latest) return;
+    var view = document.getElementById('dashboardView');
+    if (view && view.hidden) return;
+    buildFilters();
+    render();
+  });
 
   document.addEventListener('DOMContentLoaded', function () {
     if (document.body.getAttribute('data-page') === 'dashboard') init();
